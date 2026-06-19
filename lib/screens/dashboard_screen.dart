@@ -16,6 +16,10 @@ class DashboardScreen extends StatelessWidget {
     final provider = context.watch<SessionProvider>();
     final bleService = context.read<BleService>();
 
+    final isCountdownActive = provider.isCountdownRunning;
+    final isRunning = provider.isMockRunning && !provider.isPaused;
+    final isPaused = provider.isPaused;
+
     final routePoints = provider.sensorData.isNotEmpty
         ? provider.sensorData
             .map((point) => LatLng(point.latitude, point.longitude))
@@ -139,20 +143,99 @@ class DashboardScreen extends StatelessWidget {
             Center(
               child: Column(
                 children: [
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      provider.startMockSimulation();
-                    },
-                    icon: const Icon(Icons.play_arrow),
-                    label: const Text('Simulation starten'),
-                  ),
-                  const SizedBox(height: 12),
-                  OutlinedButton(
-                    onPressed: () {
-                      provider.stopMockSimulation();
-                    },
-                    child: const Text('Simulation stoppen'),
-                  ),
+                  if (isPaused)
+                    Column(
+                      children: [
+                        SizedBox(
+                          width: 240,
+                          child: ElevatedButton.icon(
+                            onPressed: provider.resumeSimulation,
+                            icon: const Icon(Icons.play_arrow),
+                            label: const Text('WEITER'),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: 240,
+                          child: OutlinedButton(
+                            onPressed: provider.stopMockSimulation,
+                            child: const Text('Messung beenden'),
+                          ),
+                        ),
+                      ],
+                    )
+                  else if (isRunning)
+                    Column(
+                      children: [
+                        SizedBox(
+                          width: 240,
+                          child: ElevatedButton(
+                            onPressed: provider.requestPause,
+                            style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                            ),
+                            child: const Text('PAUSE'),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: 240,
+                          child: OutlinedButton(
+                            onPressed: provider.stopMockSimulation,
+                            child: const Text('STOPP'),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Messung läuft',
+                          style: TextStyle(
+                            color: AppColors.textMuted,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    )
+                  else
+                    Column(
+                      children: [
+                        SizedBox(
+                          width: 240,
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              if (isCountdownActive) {
+                                provider.cancelCountdown();
+                                provider.startMockSimulation();
+                              } else {
+                                provider.startCountdown();
+                              }
+                            },
+                            style: ElevatedButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                            ),
+                            icon: Icon(
+                              isCountdownActive
+                                  ? Icons.timer
+                                  : Icons.play_arrow,
+                            ),
+                            label: Text(
+                              isCountdownActive
+                                  ? 'START in ${provider.countdownSeconds}s'
+                                  : 'START',
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        if (isCountdownActive)
+                          const Text(
+                            'Erneuter Druck startet sofort',
+                            style: TextStyle(
+                              color: AppColors.textMuted,
+                              fontSize: 12,
+                            ),
+                          ),
+                      ],
+                    ),
                 ],
               ),
             ),
