@@ -1,14 +1,32 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
+import '../providers/session_provider.dart';
+import '../services/ble_service.dart';
 import '../theme/app_theme.dart';
-import '../widgets/common_widgets.dart';
+import 'ble_scan_screen.dart';
 
-/// Hauptseite – zeigt BLE-Status, Live-Stats, Karte und Speed-Chart
-/// Aktuell nur das optische Grundgerüst, ohne echte Logik/Daten
+/// Hauptseite mit Live-Status, Geschwindigkeit und Schnellzugriffen.
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final provider = context.watch<SessionProvider>();
+    final bleService = context.read<BleService>();
+
+    final routePoints = provider.sensorData.isNotEmpty
+        ? provider.sensorData
+            .map((point) => LatLng(point.latitude, point.longitude))
+            .toList()
+        : const [
+            LatLng(48.1351, 11.5820),
+            LatLng(48.1361, 11.5830),
+          ];
+
+    final mapCenter = routePoints.first;
+
     return Scaffold(
       appBar: AppBar(title: const Text('⚡ SportTracker')),
       body: SingleChildScrollView(
@@ -16,112 +34,172 @@ class DashboardScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── BLE Status Bar ──────────────────────────────
-            AppCard(
-              child: Row(
-                children: [
-                  Container(
-                    width: 10,
-                    height: 10,
-                    decoration: const BoxDecoration(
-                      color: AppColors.textMuted,
-                      shape: BoxShape.circle,
+            const SizedBox(height: 4),
+            Align(
+              alignment: Alignment.topRight,
+              child: ValueListenableBuilder(
+                valueListenable: bleService.connectionStatus,
+                builder: (context, status, _) {
+                  final isConnected =
+                      status == BleConnectionStatus.connected;
+                  return TextButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const BleScanScreen(),
+                        ),
+                      );
+                    },
+                    style: TextButton.styleFrom(
+                      backgroundColor: AppColors.surface,
+                      foregroundColor: AppColors.textPrimary,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  const Expanded(
-                    child: Text(
-                      'Nicht verbunden',
-                      style: TextStyle(color: AppColors.textMuted, fontSize: 14),
+                    icon: Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: isConnected
+                            ? AppColors.success
+                            : AppColors.danger,
+                        shape: BoxShape.circle,
+                      ),
                     ),
+                    label: const Text('BLE'),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 360,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    border: Border.all(color: AppColors.surfaceBorder),
                   ),
-                  OutlinedButton(
-                    onPressed: () {},
-                    child: const Text('Verbinden'),
+                  child: FlutterMap(
+                    options: MapOptions(
+                      initialCenter: mapCenter,
+                      initialZoom: 15,
+                      interactionOptions: const InteractionOptions(
+                        flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+                      ),
+                    ),
+                    children: [
+                      TileLayer(
+                        urlTemplate:
+                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        userAgentPackageName:
+                            'com.example.sporttrackerflutterapp',
+                      ),
+                      PolylineLayer(
+                        polylines: [
+                          Polyline(
+                            points: routePoints,
+                            color: AppColors.accent,
+                            strokeWidth: 5,
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // ── Stats Grid ───────────────────────────────────
-            GridView.count(
-              crossAxisCount: 2,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              mainAxisSpacing: 12,
-              crossAxisSpacing: 12,
-              childAspectRatio: 1.5,
-              children: const [
-                StatCard(value: '0.0', label: 'km/h'),
-                StatCard(value: '0.00', label: 'km Distanz'),
-                StatCard(value: '00:00', label: 'Dauer'),
-                StatCard(value: '0.0', label: 'km/h Max'),
-              ],
-            ),
-            const SizedBox(height: 24),
-
-            // ── Karte Platzhalter ────────────────────────────
-            const SectionLabel('Live Karte'),
-            Container(
-              height: 240,
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AppColors.surfaceBorder),
-              ),
-              child: const Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.map_outlined, color: AppColors.textMuted, size: 36),
-                    SizedBox(height: 8),
-                    Text('Karte wird hier angezeigt',
-                        style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // ── Chart Platzhalter ────────────────────────────
-            const SectionLabel('Geschwindigkeit'),
-            Container(
-              height: 180,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AppColors.surfaceBorder),
-              ),
-              child: const Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.show_chart, color: AppColors.textMuted, size: 32),
-                    SizedBox(height: 8),
-                    Text('Chart wird hier angezeigt',
-                        style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 28),
-
-            // ── Session Controls ─────────────────────────────
-            Center(
-              child: ElevatedButton.icon(
-                onPressed: () {},
-                icon: const Icon(Icons.play_arrow),
-                label: const Text('Session starten'),
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size(220, 52),
                 ),
               ),
             ),
             const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              child: Column(
+                children: [
+                  _StatLine(
+                    label: 'Distanz',
+                    value: '${provider.sensorData.length} km',
+                  ),
+                  const SizedBox(height: 8),
+                  _StatLine(
+                    label: 'Ø',
+                    value: '${provider.averageSpeedKmh.toStringAsFixed(2)} km/h',
+                  ),
+                  const SizedBox(height: 8),
+                  _StatLine(
+                    label: 'Max',
+                    value: '${provider.maxSpeedKmh.toStringAsFixed(1)} km/h',
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Center(
+              child: Column(
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      provider.startMockSimulation();
+                    },
+                    icon: const Icon(Icons.play_arrow),
+                    label: const Text('Simulation starten'),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton(
+                    onPressed: () {
+                      provider.stopMockSimulation();
+                    },
+                    child: const Text('Simulation stoppen'),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _StatLine extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _StatLine({
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.surfaceBorder),
+      ),
+      child: Row(
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: AppColors.textMuted,
+              fontSize: 12,
+            ),
+          ),
+          const Spacer(),
+          Text(
+            value,
+            style: const TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }

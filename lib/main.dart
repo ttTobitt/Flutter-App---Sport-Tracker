@@ -1,10 +1,24 @@
 import 'package:flutter/material.dart';
-import 'package:sporttrackerflutterapp/theme/app_theme.dart';
+import 'package:provider/provider.dart';
+import 'package:sporttrackerflutterapp/providers/session_provider.dart';
 import 'package:sporttrackerflutterapp/screens/dashboard_screen.dart';
 import 'package:sporttrackerflutterapp/screens/history_screen.dart';
+import 'package:sporttrackerflutterapp/services/ble_service.dart';
+import 'package:sporttrackerflutterapp/theme/app_theme.dart';
 
 void main() {
-  runApp(const SportTrackerApp());
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => SessionProvider()),
+        Provider<BleService>(
+          create: (_) => BleService(),
+          dispose: (_, service) => service.dispose(),
+        ),
+      ],
+      child: const SportTrackerApp(),
+    ),
+  );
 }
 
 class SportTrackerApp extends StatelessWidget {
@@ -21,7 +35,7 @@ class SportTrackerApp extends StatelessWidget {
   }
 }
 
-/// Hält die Bottom-Navigation zwischen Dashboard und Verlauf
+/// Hält die Bottom-Navigation zwischen Dashboard und Verlauf.
 class RootNav extends StatefulWidget {
   const RootNav({super.key});
 

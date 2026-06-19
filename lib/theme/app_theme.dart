@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 /// Zentrale Farb- und Style-Definitionen
 /// Hier änderst du das Aussehen der ganzen App an einer Stelle
 class AppColors {
-  static const background = Color(0xFF0D0F14);
+  static const background = Color.fromARGB(255, 0, 0, 0);
   static const surface = Color(0xFF1A1E2A);
   static const surfaceBorder = Color(0xFF252A38);
   static const accent = Color(0xFF00E5FF);
