@@ -159,7 +159,7 @@ class DashboardScreen extends StatelessWidget {
                           width: 240,
                           child: OutlinedButton(
                             onPressed: provider.stopMockSimulation,
-                            child: const Text('Messung beenden'),
+                            child: const Text('STOPP'),
                           ),
                         ),
                       ],

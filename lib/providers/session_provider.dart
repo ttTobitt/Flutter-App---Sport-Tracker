@@ -141,6 +141,7 @@ class SessionProvider extends ChangeNotifier {
     }
 
     _isPaused = true;
+    _isMockRunning = false;
     _mockTimer?.cancel();
     _mockTimer = null;
     notifyListeners();
