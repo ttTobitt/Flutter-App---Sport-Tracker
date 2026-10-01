@@ -14,6 +14,11 @@ class Session {
 
   Session({required this.id, required this.points, this.pitch});
 
+  /// Dieselbe Einheit mit (neu) erkanntem Platz. Es wird eine neue Session
+  /// angelegt statt die alte zu ändern, weil Heatmap & Co. vom Platz abhängen
+  /// und nur einmal berechnet werden.
+  Session withPitch(Pitch? pitch) => Session(id: id, points: points, pitch: pitch);
+
   DateTime get start => points.first.timestamp;
   DateTime get end => points.last.timestamp;
   Duration get duration => end.difference(start);

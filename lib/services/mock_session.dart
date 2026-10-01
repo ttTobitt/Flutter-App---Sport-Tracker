@@ -1,9 +1,12 @@
 import 'dart:math';
 import 'dart:ui';
 
+import 'package:latlong2/latlong.dart';
+
 import '../models/pitch.dart';
 import '../models/sensor_data.dart';
 import '../models/session.dart';
+import 'pitch_detection.dart';
 
 /// Erzeugt eine erfundene, aber realistische Einheit, so als wäre sie gerade
 /// vom Tracker übertragen worden. Damit lässt sich die App ohne Hardware
@@ -15,8 +18,27 @@ import '../models/session.dart';
 class MockSessionGenerator {
   static const _hz = 5;
 
-  // Beispielplatz, Koordinaten frei gewählt
-  static const pitch = Pitch(centerLat: 48.1351, centerLon: 11.5820);
+  /// Hauptplatz der Heinrich Hartner Sportanlage in Pressbaum, Umriss aus
+  /// OpenStreetMap (Way 30581764, © OpenStreetMap-Mitwirkende, ODbL)
+  static const hartnerPolygon = [
+    LatLng(48.178011, 16.0675983),
+    LatLng(48.1780708, 16.0689703),
+    LatLng(48.1775356, 16.0690286),
+    LatLng(48.177475, 16.0676506),
+    LatLng(48.178011, 16.0675983),
+  ];
+
+  /// Kleiner Platz direkt daneben (Way 463661206). Wird in den Tests
+  /// gebraucht: Die Erkennung darf ihn nicht mit dem Hauptplatz verwechseln.
+  static const neighbourPolygon = [
+    LatLng(48.1772743, 16.0689283),
+    LatLng(48.1769096, 16.068972),
+    LatLng(48.1769664, 16.0700375),
+    LatLng(48.1773311, 16.0699938),
+    LatLng(48.1772743, 16.0689283),
+  ];
+
+  static final Pitch pitch = pitchFromPolygon(hartnerPolygon)!;
 
   // (min km/h, max km/h, Wahrscheinlichkeit)
   static const _modes = [
@@ -38,7 +60,7 @@ class MockSessionGenerator {
 
     // Stammposition rechtes Mittelfeld. Angriff nach rechts (x = 105),
     // y groß = rechte Seitenlinie aus Sicht des Spielers.
-    const home = Offset(62, 54);
+    final home = Offset(pitch.length * 0.59, pitch.width * 0.8);
     var pos = home;
     var target = pos;
     var speedKmh = 0.0;
@@ -57,8 +79,8 @@ class MockSessionGenerator {
         var dx = teamShift + _gauss(rnd) * 8;
         if (speedKmh > 20) dx += (rnd.nextBool() ? 1 : -1) * (15 + rnd.nextDouble() * 15);
         target = Offset(
-          (home.dx + dx).clamp(3, 102),
-          (home.dy + _gauss(rnd) * 6).clamp(3, 66),
+          (home.dx + dx).clamp(3, pitch.length - 3),
+          (home.dy + _gauss(rnd) * 6).clamp(3, pitch.width - 2),
         );
       }
 
@@ -79,7 +101,9 @@ class MockSessionGenerator {
       ));
     }
 
-    return Session(id: id, points: points, pitch: pitch);
+    // Ohne Platz zurückgeben, wie eine frisch übertragene Einheit. Den Platz
+    // muss die App selbst erkennen.
+    return Session(id: id, points: points);
   }
 
   /// Normalverteilte Zufallszahl (Mittelwert 0, Standardabweichung 1),

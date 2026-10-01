@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../models/session.dart';
+import '../providers/session_provider.dart';
 import '../services/session_analysis.dart';
 import '../theme/app_theme.dart';
 import '../utils/format.dart';
@@ -23,7 +25,11 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final session = widget.session;
+    // Immer die aktuelle Version aus dem Provider holen: Wird der Platz erst
+    // nach dem Öffnen erkannt, ersetzt der Provider die Einheit.
+    final provider = context.watch<SessionProvider>();
+    final session = provider.sessionById(widget.session.id);
+    final pitchStatus = provider.pitchStatusOf(session.id);
     final a = session.analysis;
 
     return Scaffold(
@@ -93,7 +99,20 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                   onSelectionChanged: (s) => setState(() => _pitchMode = s.first),
                 ),
                 const SizedBox(height: 12),
-                PitchView(session: session, mode: _pitchMode),
+                switch (pitchStatus) {
+                  PitchStatus.found => PitchView(session: session, mode: _pitchMode),
+                  PitchStatus.searching => const _PitchPlaceholder(
+                      text: 'Platz wird gesucht …',
+                      busy: true,
+                    ),
+                  PitchStatus.notFound => _PitchPlaceholder(
+                      text: 'Kein Fußballplatz gefunden.',
+                      action: TextButton(
+                        onPressed: () => provider.detectPitch(session.id),
+                        child: const Text('Nochmal suchen'),
+                      ),
+                    ),
+                },
               ],
             ),
           ),
@@ -223,6 +242,43 @@ class _ZoneRow extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Platzhalter in Feldgröße, solange kein Platz bekannt ist
+class _PitchPlaceholder extends StatelessWidget {
+  final String text;
+  final bool busy;
+  final Widget? action;
+
+  const _PitchPlaceholder({required this.text, this.busy = false, this.action});
+
+  @override
+  Widget build(BuildContext context) {
+    return AspectRatio(
+      aspectRatio: 105 / 68,
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.track,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (busy) ...[
+              const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2.5),
+              ),
+              const SizedBox(height: 12),
+            ],
+            Text(text, style: const TextStyle(color: AppColors.textMuted)),
+            ?action,
+          ],
+        ),
+      ),
     );
   }
 }
