@@ -36,20 +36,29 @@ class MockSessionGenerator {
     final points = <SensorData>[];
     final totalSteps = duration.inSeconds * _hz;
 
-    var pos = const Offset(60, 50);
+    // Stammposition rechtes Mittelfeld. Angriff nach rechts (x = 105),
+    // y groß = rechte Seitenlinie aus Sicht des Spielers.
+    const home = Offset(62, 54);
+    var pos = home;
     var target = pos;
     var speedKmh = 0.0;
+    // Wo der Ball gerade ist, schiebt die ganze Mannschaft vor oder zurück
+    var teamShift = 0.0;
 
     for (var step = 0; step < totalSteps; step++) {
       // Ziel erreicht → neues Ziel und neues Tempo wählen
       if ((target - pos).distance < 1.0 || speedKmh < 3 && rnd.nextDouble() < 0.02) {
         final mode = _pickMode(rnd);
         speedKmh = mode.$1 + rnd.nextDouble() * (mode.$2 - mode.$1);
-        // Bei Sprints weiter weg laufen, sonst eher kleine Wege
-        final range = speedKmh > 20 ? 30.0 : 12.0;
+        if (rnd.nextDouble() < 0.15) teamShift = -22 + rnd.nextDouble() * 45;
+
+        // Ziel streut um die Stammposition (Normalverteilung). Sprints gehen
+        // meist nach vorne (Konter, Flanke) oder zurück (Rückwärtslaufen).
+        var dx = teamShift + _gauss(rnd) * 8;
+        if (speedKmh > 20) dx += (rnd.nextBool() ? 1 : -1) * (15 + rnd.nextDouble() * 15);
         target = Offset(
-          (pos.dx + (rnd.nextDouble() * 2 - 1) * range).clamp(25, 98),
-          (pos.dy + (rnd.nextDouble() * 2 - 1) * range * 0.6).clamp(30, 66),
+          (home.dx + dx).clamp(3, 102),
+          (home.dy + _gauss(rnd) * 6).clamp(3, 66),
         );
       }
 
@@ -72,6 +81,11 @@ class MockSessionGenerator {
 
     return Session(id: id, points: points, pitch: pitch);
   }
+
+  /// Normalverteilte Zufallszahl (Mittelwert 0, Standardabweichung 1),
+  /// Box-Muller-Verfahren
+  static double _gauss(Random rnd) =>
+      sqrt(-2 * log(1 - rnd.nextDouble())) * cos(2 * pi * rnd.nextDouble());
 
   static (double, double, double) _pickMode(Random rnd) {
     var r = rnd.nextDouble();

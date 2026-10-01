@@ -1,5 +1,8 @@
+import 'dart:ui';
+
 import 'pitch.dart';
 import 'sensor_data.dart';
+import '../services/heatmap.dart';
 import '../services/session_analysis.dart';
 
 /// Eine aufgezeichnete Einheit (Training oder Spiel), so wie sie nach der
@@ -17,4 +20,14 @@ class Session {
 
   /// Die Auswertung wird erst beim ersten Zugriff berechnet und dann gemerkt.
   late final SessionAnalysis analysis = SessionAnalysis(points);
+
+  /// Alle Punkte in Metern auf dem Platz (leer, wenn kein Platz bekannt ist)
+  late final List<Offset> pitchPositions = pitch == null
+      ? const []
+      : points.map((p) => pitch!.toPitchMeters(p.latitude, p.longitude)).toList();
+
+  late final HeatmapGrid? heatmap = pitch == null
+      ? null
+      : HeatmapGrid.compute(pitchPositions,
+          pitchLength: pitch!.length, pitchWidth: pitch!.width);
 }

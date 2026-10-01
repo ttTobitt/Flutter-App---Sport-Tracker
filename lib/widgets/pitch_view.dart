@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
@@ -8,19 +9,65 @@ import '../theme/app_theme.dart';
 
 enum PitchMode { heatmap, route }
 
-/// Zeichnet ein Fußballfeld und darauf entweder die Heatmap (wo hat sich der
-/// Spieler wie lange aufgehalten) oder den Laufweg (Sprints hervorgehoben).
+/// Zeichnet ein Fußballfeld und darauf die Heatmap (wo hat sich der Spieler
+/// wie lange aufgehalten) oder den Laufweg (Sprints hervorgehoben).
 ///
 /// Gezeichnet wird mit einem CustomPainter: Flutter gibt uns eine Leinwand
-/// (Canvas), auf die wir Linien, Kreise und Pfade malen.
-class PitchView extends StatelessWidget {
+/// (Canvas), auf die wir Linien, Flächen, Bilder und Text malen.
+class PitchView extends StatefulWidget {
   final Session session;
   final PitchMode mode;
 
   const PitchView({super.key, required this.session, required this.mode});
 
   @override
+  State<PitchView> createState() => _PitchViewState();
+}
+
+class _PitchViewState extends State<PitchView> {
+  ui.Image? _heatmapImage;
+
+  @override
+  void initState() {
+    super.initState();
+    _buildHeatmapImage();
+  }
+
+  @override
+  void didUpdateWidget(PitchView old) {
+    super.didUpdateWidget(old);
+    if (old.session != widget.session) _buildHeatmapImage();
+  }
+
+  /// Aus dem Dichte-Raster ein Bild machen (1 Pixel pro Rasterzelle).
+  /// Das passiert asynchron, darum ist das Bild kurz nach dem Öffnen noch null.
+  void _buildHeatmapImage() {
+    final grid = widget.session.heatmap;
+    if (grid == null) return;
+    ui.decodeImageFromPixels(
+      grid.toRgba(),
+      grid.cols,
+      grid.rows,
+      ui.PixelFormat.rgba8888,
+      (image) {
+        if (!mounted) return;
+        setState(() {
+          _heatmapImage?.dispose();
+          _heatmapImage = image;
+        });
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _heatmapImage?.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final session = widget.session;
     final pitch = session.pitch;
     if (pitch == null) {
       return const AspectRatio(
@@ -29,22 +76,15 @@ class PitchView extends StatelessWidget {
       );
     }
 
-    // GPS → Meter auf dem Platz, einmal umrechnen
-    final positions = session.points
-        .map((p) => pitch.toPitchMeters(p.latitude, p.longitude))
-        .toList();
-
     return AspectRatio(
       aspectRatio: pitch.length / pitch.width,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
         child: CustomPaint(
           painter: _PitchPainter(
-            positions: positions,
-            sprints: session.analysis.sprints,
-            pitchLength: pitch.length,
-            pitchWidth: pitch.width,
-            mode: mode,
+            session: session,
+            mode: widget.mode,
+            heatmapImage: _heatmapImage,
           ),
         ),
       ),
@@ -53,65 +93,60 @@ class PitchView extends StatelessWidget {
 }
 
 class _PitchPainter extends CustomPainter {
-  final List<Offset> positions;
-  final List<Sprint> sprints;
-  final double pitchLength;
-  final double pitchWidth;
+  final Session session;
   final PitchMode mode;
+  final ui.Image? heatmapImage;
 
   _PitchPainter({
-    required this.positions,
-    required this.sprints,
-    required this.pitchLength,
-    required this.pitchWidth,
+    required this.session,
     required this.mode,
+    required this.heatmapImage,
   });
+
+  double get _length => session.pitch!.length;
+  double get _width => session.pitch!.width;
 
   @override
   void paint(Canvas canvas, Size size) {
     canvas.drawRect(Offset.zero & size, Paint()..color = AppColors.pitch);
 
-    // Rand um das Feld, damit Punkte knapp an der Linie noch sichtbar sind
+    // Rand um das Feld, damit Punkte knapp an der Linie noch sichtbar sind.
+    // Maßstab so wählen, dass das Feld in beide Richtungen passt, und mittig
+    // ausrichten.
     const margin = 8.0;
-    final scale = (size.width - 2 * margin) / pitchLength;
-    Offset toPx(Offset m) => Offset(margin + m.dx * scale, margin + m.dy * scale);
+    final scale = min(
+      (size.width - 2 * margin) / _length,
+      (size.height - 2 * margin) / _width,
+    );
+    final origin = Offset(
+      (size.width - _length * scale) / 2,
+      (size.height - _width * scale) / 2,
+    );
+    Offset toPx(Offset m) => origin + m * scale;
+    final field = Rect.fromPoints(toPx(Offset.zero), toPx(Offset(_length, _width)));
 
-    if (mode == PitchMode.heatmap) {
-      _paintHeatmap(canvas, scale, toPx);
-    }
-    _paintLines(canvas, scale, toPx);
-    if (mode == PitchMode.route) {
-      _paintRoute(canvas, toPx);
+    switch (mode) {
+      case PitchMode.heatmap:
+        _paintHeatmap(canvas, field);
+        _paintLines(canvas, scale, toPx);
+      case PitchMode.route:
+        _paintLines(canvas, scale, toPx);
+        _paintRoute(canvas, toPx);
     }
   }
 
-  /// Heatmap: Platz in 3 × 3 m große Felder teilen, zählen, wie viele
-  /// Messpunkte in jedes Feld fallen, und je Feld einen weichen Kreis malen.
-  /// Je mehr Punkte, desto kräftiger die Farbe.
-  void _paintHeatmap(Canvas canvas, double scale, Offset Function(Offset) toPx) {
-    const cell = 3.0;
-    final cols = (pitchLength / cell).ceil();
-    final rows = (pitchWidth / cell).ceil();
-    final counts = List.filled(cols * rows, 0);
-
-    for (final p in positions) {
-      final c = (p.dx / cell).floor().clamp(0, cols - 1);
-      final r = (p.dy / cell).floor().clamp(0, rows - 1);
-      counts[r * cols + c]++;
-    }
-    final maxCount = counts.reduce(max);
-    if (maxCount == 0) return;
-
-    final paint = Paint()
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, cell * scale);
-    for (var i = 0; i < counts.length; i++) {
-      if (counts[i] == 0) continue;
-      // Wurzel, damit auch selten besuchte Bereiche noch sichtbar sind
-      final strength = sqrt(counts[i] / maxCount);
-      paint.color = AppColors.heat.withValues(alpha: 0.85 * strength);
-      final center = Offset((i % cols + 0.5) * cell, (i ~/ cols + 0.5) * cell);
-      canvas.drawCircle(toPx(center), cell * scale * 1.1, paint);
-    }
+  /// Das kleine Heatmap-Bild wird auf die Feldgröße hochskaliert. Die
+  /// Filterqualität sorgt dafür, dass dabei zwischen den Pixeln weich
+  /// übergeblendet wird statt Kästchen zu zeigen.
+  void _paintHeatmap(Canvas canvas, Rect field) {
+    final image = heatmapImage;
+    if (image == null) return;
+    canvas.drawImageRect(
+      image,
+      Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+      field,
+      Paint()..filterQuality = FilterQuality.medium,
+    );
   }
 
   /// Linien eines Fußballfelds nach Regelwerk (Maße in Metern)
@@ -120,7 +155,7 @@ class _PitchPainter extends CustomPainter {
       ..color = Colors.white.withValues(alpha: 0.75)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5;
-    final l = pitchLength, w = pitchWidth;
+    final l = _length, w = _width;
 
     Rect rect(double x, double y, double rw, double rh) =>
         Rect.fromPoints(toPx(Offset(x, y)), toPx(Offset(x + rw, y + rh)));
@@ -138,6 +173,7 @@ class _PitchPainter extends CustomPainter {
 
   /// Laufweg: der ganze Weg dünn und halbtransparent, Sprints kräftig darüber.
   void _paintRoute(Canvas canvas, Offset Function(Offset) toPx) {
+    final positions = session.pitchPositions;
     final path = Path();
     // Jeden 5. Punkt (= 1 pro Sekunde) nehmen, sonst wird es zu unruhig
     for (var i = 0; i < positions.length; i += 5) {
@@ -157,7 +193,7 @@ class _PitchPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3
       ..strokeCap = StrokeCap.round;
-    for (final s in sprints) {
+    for (final Sprint s in session.analysis.sprints) {
       final sprintPath = Path();
       for (var i = s.startIndex; i <= s.endIndex; i++) {
         final p = toPx(positions[i]);
@@ -171,5 +207,7 @@ class _PitchPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_PitchPainter old) =>
-      old.mode != mode || old.positions != positions;
+      old.mode != mode ||
+      old.session != session ||
+      old.heatmapImage != heatmapImage;
 }
