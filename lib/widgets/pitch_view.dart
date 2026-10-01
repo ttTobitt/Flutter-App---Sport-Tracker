@@ -184,10 +184,23 @@ class _PitchPainter extends CustomPainter {
   void _paintRoute(Canvas canvas, Offset Function(Offset) toPx) {
     final positions = session.pitchPositions;
     final path = Path();
-    // Jeden 5. Punkt (= 1 pro Sekunde) nehmen, sonst wird es zu unruhig
+    // Jeden 5. Punkt (= 1 pro Sekunde) nehmen, sonst wird es zu unruhig.
+    // Die Halbzeitpause auslassen und danach neu ansetzen, sonst gäbe es
+    // einen Strich quer übers Feld (2. Halbzeit ist ja gedreht).
+    // Auch wenn die Pause keine Punkte hat (kein GPS in der Kabine), muss
+    // der Stift beim Wechsel zur 2. Halbzeit abgesetzt werden.
+    final secondHalfStart =
+        session.turnsSecondHalf ? session.halftime!.startIndex : positions.length;
+    var penDown = false;
     for (var i = 0; i < positions.length; i += 5) {
+      if (session.isInBreak(i)) {
+        penDown = false;
+        continue;
+      }
+      if (i >= secondHalfStart && i - 5 < secondHalfStart) penDown = false;
       final p = toPx(positions[i]);
-      i == 0 ? path.moveTo(p.dx, p.dy) : path.lineTo(p.dx, p.dy);
+      penDown ? path.lineTo(p.dx, p.dy) : path.moveTo(p.dx, p.dy);
+      penDown = true;
     }
     canvas.drawPath(
       path,

@@ -42,6 +42,15 @@ class _SpeedChartPainter extends CustomPainter {
     double y(double kmh) => size.height - kmh / maxY * size.height;
     double xOfIndex(int i) => i / (points.length - 1) * size.width;
 
+    // Halbzeitpause bei Spielen grau hinterlegen
+    final ht = session.halftime;
+    if (session.isMatch && ht != null) {
+      canvas.drawRect(
+        Rect.fromLTRB(xOfIndex(ht.startIndex), 0, xOfIndex(ht.endIndex), size.height),
+        Paint()..color = AppColors.track,
+      );
+    }
+
     // Bei 5 Hz hat eine Einheit über 25.000 Punkte, der Bildschirm aber nur
     // ein paar hundert Pixel. Darum Punkte in Gruppen zusammenfassen
     // (Mittelwert pro 2 Pixel), so bleibt die Kurve ruhig und schnell.

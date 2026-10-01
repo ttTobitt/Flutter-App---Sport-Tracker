@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:sporttrackerflutterapp/models/pitch.dart';
+import 'package:sporttrackerflutterapp/models/session.dart';
 import 'package:sporttrackerflutterapp/providers/session_provider.dart';
 import 'package:sporttrackerflutterapp/services/mock_session.dart';
 import 'package:sporttrackerflutterapp/services/pitch_service.dart';
@@ -51,5 +52,19 @@ void main() {
     await provider.detectPitch(3);
     expect(provider.sessionById(3).pitch, same(corrected));
     expect(fake.requests, before);
+  });
+
+  test('Mit Halbzeitpause wird „Spiel“ vorgeschlagen, sonst „Training“', () async {
+    final provider = SessionProvider(pitchService: FakePitchService());
+    provider.addMockSession(); // Training
+    provider.addMockSession(); // Spiel mit Halbzeit
+    expect(provider.sessionById(1).type, SessionType.training);
+    expect(provider.sessionById(2).type, SessionType.match);
+
+    // Von Hand umstellen
+    provider.setType(2, SessionType.training);
+    expect(provider.sessionById(2).type, SessionType.training);
+    expect(provider.sessionById(2).turnsSecondHalf, isFalse);
+    await Future.wait([provider.detectPitch(1), provider.detectPitch(2)]);
   });
 }

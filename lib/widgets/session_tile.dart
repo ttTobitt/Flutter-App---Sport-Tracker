@@ -43,6 +43,7 @@ class SessionTile extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
+                      '${session.isMatch ? 'Spiel' : 'Training'} · '
                       '${formatTime(session.start)} · ${minutesOf(session.duration)} min · '
                       '${a.sprints.length} Sprints',
                       style: const TextStyle(fontSize: 13, color: AppColors.textMuted),

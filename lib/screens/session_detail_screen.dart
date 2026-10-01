@@ -48,6 +48,25 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
             '${formatTime(session.start)} – ${formatTime(session.end)}',
             style: const TextStyle(fontSize: 14, color: AppColors.textMuted),
           ),
+          const SizedBox(height: 14),
+
+          // ── Training oder Spiel ──────────────────────────
+          SegmentedButton<SessionType>(
+            segments: const [
+              ButtonSegment(value: SessionType.training, label: Text('Training')),
+              ButtonSegment(value: SessionType.match, label: Text('Spiel')),
+            ],
+            selected: {session.type},
+            showSelectedIcon: false,
+            onSelectionChanged: (s) => provider.setType(session.id, s.first),
+          ),
+          if (session.isMatch) ...[
+            const SizedBox(height: 8),
+            Text(
+              _halftimeText(session),
+              style: const TextStyle(fontSize: 13, color: AppColors.textMuted),
+            ),
+          ],
           const SizedBox(height: 18),
 
           // ── Kennzahlen ───────────────────────────────────
@@ -88,7 +107,18 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const SectionLabel('Wo du gelaufen bist'),
+                Row(
+                  children: [
+                    const SectionLabel('Wo du gelaufen bist'),
+                    const Spacer(),
+                    // Nur bei gedrehter 2. Halbzeit ist die Richtung bekannt
+                    if (session.turnsSecondHalf)
+                      const Text(
+                        'Angriff →',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
+                  ],
+                ),
                 const SizedBox(height: 12),
                 SegmentedButton<PitchMode>(
                   segments: const [
@@ -220,6 +250,16 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
         ],
       ),
     );
+  }
+
+  String _halftimeText(Session session) {
+    final ht = session.halftime;
+    if (ht == null) {
+      return 'Keine Halbzeitpause gefunden. Die 2. Halbzeit wird darum nicht '
+          'gedreht.';
+    }
+    return 'Halbzeitpause ${ht.start.inMinutes}′–${ht.end.inMinutes}′ erkannt. '
+        'Die 2. Halbzeit ist gedreht, damit die Heatmap zur 1. passt.';
   }
 
   void _editPitch(int sessionId) {

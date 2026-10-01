@@ -42,7 +42,7 @@ class SessionProvider extends ChangeNotifier {
   PitchStatus pitchStatusOf(int id) => _pitchStatus[id] ?? PitchStatus.notFound;
 
   /// Legt eine Test-Einheit an. Jede neue liegt zwei Tage vor der vorherigen,
-  /// damit der Verlauf nach mehreren Tagen aussieht.
+  /// damit der Verlauf nach mehreren Tagen aussieht. Jede zweite ist ein Spiel.
   void addMockSession() {
     final id = _sessions.length + 1;
     final today = DateTime.now();
@@ -52,10 +52,14 @@ class SessionProvider extends ChangeNotifier {
       id: id,
       start: start,
       duration: Duration(minutes: 75 + (id * 7) % 20),
+      isMatch: id.isEven,
     ));
   }
 
   void _addSession(Session session) {
+    // Typ vorschlagen: Gibt es eine Halbzeitpause, ist es vermutlich ein Spiel.
+    // Der Nutzer kann es im Detail-Screen ändern.
+    if (session.halftime != null) session = session.withType(SessionType.match);
     _sessions.add(session);
     _sessions.sort((a, b) => b.start.compareTo(a.start));
     notifyListeners();
@@ -107,6 +111,12 @@ class SessionProvider extends ChangeNotifier {
         _pitchStatus[s.id] = PitchStatus.found;
       }
     }
+    notifyListeners();
+  }
+
+  /// Training oder Spiel von Hand festlegen
+  void setType(int id, SessionType type) {
+    _replace(sessionById(id).withType(type));
     notifyListeners();
   }
 

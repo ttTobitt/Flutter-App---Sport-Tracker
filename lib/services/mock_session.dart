@@ -49,60 +49,102 @@ class MockSessionGenerator {
     (22.0, 29.0, 0.03), // sprinten
   ];
 
+  /// Erzeugt eine Einheit. Bei [isMatch] zwei Halbzeiten à 45 min mit
+  /// 15 min Pause am Spielfeldrand und Seitenwechsel, sonst ein Training
+  /// über [duration] am Stück.
   static Session generate({
     required int id,
     required DateTime start,
     Duration duration = const Duration(minutes: 92),
+    bool isMatch = false,
   }) {
     final rnd = Random(id);
     final points = <SensorData>[];
-    final totalSteps = duration.inSeconds * _hz;
+    var step = 0;
 
-    // Stammposition rechtes Mittelfeld. Angriff nach rechts (x = 105),
+    // Stammposition rechtes Mittelfeld. Angriff nach rechts (x = Länge),
     // y groß = rechte Seitenlinie aus Sicht des Spielers.
     final home = Offset(pitch.length * 0.59, pitch.width * 0.8);
-    var pos = home;
+    var pos = home; // in „Mannschafts-Sicht“ (Angriff immer nach rechts)
     var target = pos;
     var speedKmh = 0.0;
     // Wo der Ball gerade ist, schiebt die ganze Mannschaft vor oder zurück
     var teamShift = 0.0;
+    // Nach dem Seitenwechsel wird die echte Position um 180° gedreht
+    var turned = false;
 
-    for (var step = 0; step < totalSteps; step++) {
-      // Ziel erreicht → neues Ziel und neues Tempo wählen
-      if ((target - pos).distance < 1.0 || speedKmh < 3 && rnd.nextDouble() < 0.02) {
-        final mode = _pickMode(rnd);
-        speedKmh = mode.$1 + rnd.nextDouble() * (mode.$2 - mode.$1);
-        if (rnd.nextDouble() < 0.15) teamShift = -22 + rnd.nextDouble() * 45;
+    Offset real(Offset p) =>
+        turned ? Offset(pitch.length - p.dx, pitch.width - p.dy) : p;
 
-        // Ziel streut um die Stammposition (Normalverteilung). Sprints gehen
-        // meist nach vorne (Konter, Flanke) oder zurück (Rückwärtslaufen).
-        var dx = teamShift + _gauss(rnd) * 8;
-        if (speedKmh > 20) dx += (rnd.nextBool() ? 1 : -1) * (15 + rnd.nextDouble() * 15);
-        target = Offset(
-          (home.dx + dx).clamp(3, pitch.length - 3),
-          (home.dy + _gauss(rnd) * 6).clamp(3, pitch.width - 2),
-        );
-      }
-
-      // Kleines Rauschen auf die Geschwindigkeit wie bei echtem GPS
-      final noisy = max(0.0, speedKmh + (rnd.nextDouble() - 0.5) * 0.8);
-      final stepMeters = noisy / 3.6 / _hz;
-      final dir = target - pos;
-      if (dir.distance > 0) {
-        pos += dir / dir.distance * min(stepMeters, dir.distance);
-      }
-
-      final (lat, lon) = pitch.toGps(pos);
+    void record(Offset realPos, double kmh) {
+      final (lat, lon) = pitch.toGps(realPos);
       points.add(SensorData(
         timestamp: start.add(Duration(milliseconds: step * 1000 ~/ _hz)),
         latitude: lat,
         longitude: lon,
-        speedKmh: noisy,
+        speedKmh: kmh,
       ));
+      step++;
     }
 
-    // Ohne Platz zurückgeben, wie eine frisch übertragene Einheit. Den Platz
-    // muss die App selbst erkennen.
+    void move(double kmh) {
+      final stepMeters = kmh / 3.6 / _hz;
+      final dir = target - pos;
+      if (dir.distance > 0) {
+        pos += dir / dir.distance * min(stepMeters, dir.distance);
+      }
+    }
+
+    void play(Duration length) {
+      for (var i = 0; i < length.inSeconds * _hz; i++) {
+        // Ziel erreicht → neues Ziel und neues Tempo wählen
+        if ((target - pos).distance < 1.0 || speedKmh < 3 && rnd.nextDouble() < 0.02) {
+          final mode = _pickMode(rnd);
+          speedKmh = mode.$1 + rnd.nextDouble() * (mode.$2 - mode.$1);
+          if (rnd.nextDouble() < 0.15) teamShift = -22 + rnd.nextDouble() * 45;
+
+          // Ziel streut um die Stammposition (Normalverteilung). Sprints gehen
+          // meist nach vorne (Konter, Flanke) oder zurück (Rückwärtslaufen).
+          var dx = teamShift + _gauss(rnd) * 8;
+          if (speedKmh > 20) dx += (rnd.nextBool() ? 1 : -1) * (15 + rnd.nextDouble() * 15);
+          target = Offset(
+            (home.dx + dx).clamp(3, pitch.length - 3),
+            (home.dy + _gauss(rnd) * 6).clamp(3, pitch.width - 2),
+          );
+        }
+        // Kleines Rauschen auf die Geschwindigkeit wie bei echtem GPS
+        final noisy = max(0.0, speedKmh + (rnd.nextDouble() - 0.5) * 0.8);
+        move(noisy);
+        record(real(pos), noisy);
+      }
+    }
+
+    /// Halbzeitpause: gemütlich zur Bank neben dem Feld gehen, dort stehen.
+    void halftimeBreak(Duration length) {
+      var realPos = real(pos);
+      final bench = Offset(pitch.length / 2, pitch.width + 6);
+      for (var i = 0; i < length.inSeconds * _hz; i++) {
+        final dir = bench - realPos;
+        final kmh = dir.distance > 1 ? 4.0 : rnd.nextDouble() * 0.8;
+        if (dir.distance > 1) realPos += dir / dir.distance * (kmh / 3.6 / _hz);
+        record(realPos, kmh);
+      }
+      // Zurück aufs Feld, jetzt mit getauschten Seiten
+      turned = true;
+      pos = home;
+      target = home;
+    }
+
+    if (isMatch) {
+      play(const Duration(minutes: 45));
+      halftimeBreak(const Duration(minutes: 15));
+      play(const Duration(minutes: 45));
+    } else {
+      play(duration);
+    }
+
+    // Ohne Platz und als Training zurückgeben, wie eine frisch übertragene
+    // Einheit. Platz und Typ muss die App selbst erkennen.
     return Session(id: id, points: points);
   }
 
