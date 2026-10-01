@@ -33,7 +33,7 @@ class _BleScanScreenState extends State<BleScanScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('BLE-Geräte'),
+        title: const Text('Tracker suchen'),
       ),
       body: AnimatedBuilder(
         animation: Listenable.merge([
@@ -65,7 +65,11 @@ class _BleScanScreenState extends State<BleScanScreen> {
                 Expanded(
                   child: results.isEmpty
                       ? const Center(
-                          child: Text('Noch keine Geräte gefunden.'),
+                          child: Text(
+                            'Kein Tracker gefunden.\n'
+                            'Ist der Tracker eingeschaltet und in der Nähe?',
+                            textAlign: TextAlign.center,
+                          ),
                         )
                       : ListView.builder(
                           itemCount: results.length,

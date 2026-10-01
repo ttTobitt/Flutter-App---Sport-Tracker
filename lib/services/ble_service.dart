@@ -13,6 +13,14 @@ enum BleConnectionStatus {
   error,
 }
 
+/// UUIDs des Sporttrackers. Müssen mit der Firmware übereinstimmen,
+/// siehe vault/BLE-Protokoll.md.
+class TrackerUuids {
+  static final service = Guid('be440001-a3df-4184-b0be-9ee4a9662653');
+  static final commands = Guid('be440002-a3df-4184-b0be-9ee4a9662653');
+  static final data = Guid('be440003-a3df-4184-b0be-9ee4a9662653');
+}
+
 class BleService {
   StreamSubscription<List<ScanResult>>? _scanSubscription;
   StreamSubscription<BluetoothConnectionState>? _connectionSubscription;
@@ -39,7 +47,12 @@ class BleService {
         scanResults.value = results;
       });
 
-      await FlutterBluePlus.startScan(timeout: const Duration(seconds: 15));
+      // Nur Geräte anzeigen, die unseren Service im Advertising mitsenden.
+      // Kopfhörer, Uhren usw. werden so schon von Android herausgefiltert.
+      await FlutterBluePlus.startScan(
+        withServices: [TrackerUuids.service],
+        timeout: const Duration(seconds: 15),
+      );
     } catch (e) {
       errorMessage.value = e.toString();
       connectionStatus.value = BleConnectionStatus.error;
