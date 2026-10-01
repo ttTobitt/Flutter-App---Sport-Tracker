@@ -1,72 +1,104 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
-/// Zentrale Farb- und Style-Definitionen
+/// Zentrale Farb- und Style-Definitionen (Design A „Sportplatz“)
 /// Hier änderst du das Aussehen der ganzen App an einer Stelle
 class AppColors {
-  static const background = Color.fromARGB(255, 0, 0, 0);
-  static const surface = Color(0xFF1A1E2A);
-  static const surfaceBorder = Color(0xFF252A38);
-  static const accent = Color(0xFF00E5FF);
-  static const accent2 = Color(0xFF7C3AED);
-  static const danger = Color(0xFFEF4444);
-  static const success = Color(0xFF22C55E);
-  static const textPrimary = Color(0xFFE8EAF0);
-  static const textMuted = Color(0xFF6B7280);
+  static const background = Color(0xFFF4F1E8); // Kreide/Papier
+  static const surface = Color(0xFFFFFFFF); // Karten
+  static const surfaceBorder = Color(0xFFDDD7C6);
+  static const track = Color(0xFFE6E0CF); // Hintergrund von Balken, Gitterlinien
+  static const ink = Color(0xFF14251A); // Haupttext
+  static const textMuted = Color(0xFF55604F);
+  static const pitch = Color(0xFF2E6B45); // Rasengrün
+  static const sprint = Color(0xFFC2410C); // Akzent: alles, was mit Sprints zu tun hat
+  static const heat = Color(0xFFFFC400); // Heatmap auf dem Rasen
+  static const success = Color(0xFF2E6B45);
+  static const danger = Color(0xFFB42318);
+
+  /// Farben der Geschwindigkeitszonen, von langsam (hell) bis Sprint
+  static const zones = [
+    Color(0xFFB9C9B6),
+    Color(0xFF7FA487),
+    Color(0xFF2E6B45),
+    sprint,
+  ];
+}
+
+/// Schmale, fette Schrift für Überschriften und große Zahlen
+TextStyle displayStyle({double size = 34, Color color = AppColors.ink}) {
+  return GoogleFonts.barlowCondensed(
+    fontSize: size,
+    fontWeight: FontWeight.w700,
+    height: 1.0,
+    color: color,
+  );
 }
 
 ThemeData buildAppTheme() {
-  return ThemeData(
+  final base = ThemeData(
     useMaterial3: true,
+    brightness: Brightness.light,
     scaffoldBackgroundColor: AppColors.background,
-    brightness: Brightness.dark,
-    fontFamily: 'Roboto',
-    colorScheme: const ColorScheme.dark(
-      primary: AppColors.accent,
-      secondary: AppColors.accent2,
+    colorScheme: ColorScheme.fromSeed(
+      seedColor: AppColors.pitch,
+      primary: AppColors.pitch,
+      secondary: AppColors.sprint,
       surface: AppColors.surface,
       error: AppColors.danger,
     ),
-    appBarTheme: const AppBarTheme(
+  );
+
+  return base.copyWith(
+    textTheme: GoogleFonts.barlowTextTheme(base.textTheme).apply(
+      bodyColor: AppColors.ink,
+      displayColor: AppColors.ink,
+    ),
+    appBarTheme: AppBarTheme(
       backgroundColor: AppColors.background,
+      foregroundColor: AppColors.ink,
       elevation: 0,
+      scrolledUnderElevation: 0,
       centerTitle: false,
-      titleTextStyle: TextStyle(
-        color: AppColors.accent,
-        fontSize: 20,
-        fontWeight: FontWeight.bold,
-        letterSpacing: -0.5,
+      titleTextStyle: GoogleFonts.barlow(
+        color: AppColors.textMuted,
+        fontSize: 16,
+        fontWeight: FontWeight.w500,
       ),
     ),
-    cardTheme: CardThemeData(
-      color: AppColors.surface,
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: const BorderSide(color: AppColors.surfaceBorder),
-      ),
-    ),
-    bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+    navigationBarTheme: NavigationBarThemeData(
       backgroundColor: AppColors.surface,
-      selectedItemColor: AppColors.accent,
-      unselectedItemColor: AppColors.textMuted,
-      type: BottomNavigationBarType.fixed,
-      elevation: 0,
+      indicatorColor: AppColors.pitch.withValues(alpha: 0.12),
+      labelTextStyle: WidgetStatePropertyAll(
+        GoogleFonts.barlow(fontSize: 12, fontWeight: FontWeight.w600),
+      ),
     ),
-    elevatedButtonTheme: ElevatedButtonThemeData(
-      style: ElevatedButton.styleFrom(
-        backgroundColor: AppColors.accent,
-        foregroundColor: Colors.black,
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        backgroundColor: AppColors.pitch,
+        foregroundColor: Colors.white,
+        minimumSize: const Size.fromHeight(48),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+        textStyle: GoogleFonts.barlow(fontWeight: FontWeight.w600, fontSize: 16),
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
-        foregroundColor: AppColors.textPrimary,
+        foregroundColor: AppColors.ink,
+        minimumSize: const Size.fromHeight(48),
         side: const BorderSide(color: AppColors.surfaceBorder),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        textStyle: GoogleFonts.barlow(fontWeight: FontWeight.w600, fontSize: 16),
+      ),
+    ),
+    segmentedButtonTheme: SegmentedButtonThemeData(
+      style: SegmentedButton.styleFrom(
+        backgroundColor: AppColors.track,
+        selectedBackgroundColor: AppColors.surface,
+        foregroundColor: AppColors.textMuted,
+        selectedForegroundColor: AppColors.ink,
+        side: const BorderSide(color: AppColors.track),
+        textStyle: GoogleFonts.barlow(fontWeight: FontWeight.w600, fontSize: 14),
       ),
     ),
   );

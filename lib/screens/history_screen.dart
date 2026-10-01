@@ -1,102 +1,63 @@
 import 'package:flutter/material.dart';
-import '../theme/app_theme.dart';
-import 'session_detail_screen.dart';
+import 'package:provider/provider.dart';
 
-/// Verlauf-Seite – Liste aller vergangenen Sessions
-/// Aktuell mit ein paar Platzhalter-Einträgen rein fürs Layout
+import '../providers/session_provider.dart';
+import '../theme/app_theme.dart';
+import '../utils/format.dart';
+import '../widgets/common_widgets.dart';
+import '../widgets/session_tile.dart';
+
+/// Verlauf: alle Einheiten, neueste zuerst, oben die Summe dieser Woche.
 class HistoryScreen extends StatelessWidget {
   const HistoryScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // Platzhalter-Liste nur fürs Aussehen – später aus SQLite geladen
-    final placeholderSessions = List.generate(3, (i) => i);
+    final sessions = context.watch<SessionProvider>().sessions;
+
+    // Woche beginnt am Montag um 0 Uhr
+    final now = DateTime.now();
+    final monday = DateTime(now.year, now.month, now.day)
+        .subtract(Duration(days: now.weekday - 1));
+    final thisWeek = sessions.where((s) => !s.start.isBefore(monday)).toList();
+    final weekKm = thisWeek.fold<double>(0, (sum, s) => sum + s.analysis.distanceKm);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Verlauf')),
-      body: placeholderSessions.isEmpty
-          ? const Center(
-              child: Text(
-                'Noch keine Sessions gespeichert.',
-                style: TextStyle(color: AppColors.textMuted),
-              ),
-            )
-          : ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: placeholderSessions.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 10),
-              itemBuilder: (context, index) {
-                return _SessionTile(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const SessionDetailScreen(),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-    );
-  }
-}
-
-class _SessionTile extends StatelessWidget {
-  final VoidCallback onTap;
-  const _SessionTile({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.surfaceBorder),
-        ),
-        child: Row(
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
           children: [
-            const Text('⚽', style: TextStyle(fontSize: 24)),
-            const SizedBox(width: 16),
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '19.06.2026 · 18:30',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
-                      color: AppColors.textPrimary,
+            Text('VERLAUF', style: displayStyle(size: 34)),
+            const SizedBox(height: 16),
+            if (sessions.isEmpty)
+              const Padding(
+                padding: EdgeInsets.only(top: 48),
+                child: Text(
+                  'Noch keine Einheiten. Übertrage sie vom Tracker oder erzeuge '
+                  'auf der Startseite eine Beispiel-Einheit.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: AppColors.textMuted),
+                ),
+              )
+            else ...[
+              AppCard(
+                child: Row(
+                  children: [
+                    const SectionLabel('Diese Woche'),
+                    const Spacer(),
+                    Text(
+                      '${thisWeek.length} Einheiten · ${formatNumber(weekKm)} km',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
-                  ),
-                  SizedBox(height: 4),
-                  Text(
-                    '— km · —:— · Max — km/h',
-                    style: TextStyle(fontSize: 13, color: AppColors.textMuted),
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: AppColors.accent.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: const Text(
-                '— km',
-                style: TextStyle(
-                  color: AppColors.accent,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
+                  ],
                 ),
               ),
-            ),
+              const SizedBox(height: 16),
+              for (final s in sessions) ...[
+                SessionTile(session: s),
+                const SizedBox(height: 10),
+              ],
+            ],
           ],
         ),
       ),

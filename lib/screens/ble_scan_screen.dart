@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../models/sensor_data.dart';
-import '../providers/session_provider.dart';
 import '../services/ble_service.dart';
 
 /// Screen zum Suchen und Verbinden von BLE-Geräten.
@@ -25,8 +23,9 @@ class _BleScanScreenState extends State<BleScanScreen> {
 
   @override
   void dispose() {
+    // Nur den Scan stoppen. Den BleService selbst nicht entsorgen, er gehört
+    // dem Provider in main.dart und wird noch von anderen Screens gebraucht.
     _bleService.stopScan();
-    _bleService.dispose();
     super.dispose();
   }
 
@@ -80,27 +79,14 @@ class _BleScanScreenState extends State<BleScanScreen> {
                               subtitle: Text(device.remoteId.str),
                               trailing: Text(result.rssi.toString()),
                               onTap: () async {
-                                final provider = context.read<SessionProvider>();
-                                if (!mounted) return;
-
+                                // Verbinden und zurück zur Startseite. Das
+                                // Abholen der Einheiten kommt mit dem
+                                // BLE-Protokoll (Meilenstein 5).
                                 await _bleService.connect(device);
-                                if (!mounted) return;
-
-                                provider.addSensorData(
-                                  SensorData(
-                                    timestamp: DateTime.now(),
-                                    latitude: 48.1351,
-                                    longitude: 11.5820,
-                                    speedKmh: provider.currentSpeedKmh,
-                                  ),
-                                );
+                                if (!context.mounted) return;
                                 if (_bleService.connectionStatus.value ==
                                     BleConnectionStatus.connected) {
-                                  await _bleService.subscribeToSensorData(
-                                    (sensorData) {
-                                      provider.addSensorData(sensorData);
-                                    },
-                                  );
+                                  Navigator.pop(context);
                                 }
                               },
                             );
