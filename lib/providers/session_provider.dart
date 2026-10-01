@@ -22,6 +22,11 @@ class SessionProvider extends ChangeNotifier {
   final List<Session> _sessions = [];
   final Map<int, PitchStatus> _pitchStatus = {};
 
+  /// Laufende Platzsuchen. Wird für dieselbe Einheit nochmal gesucht (z. B.
+  /// „Nochmal suchen“ während der Suche), gibt es dieselbe Suche zurück statt
+  /// einer zweiten. Sonst würde derselbe Platz doppelt gespeichert.
+  final Map<int, Future<void>> _runningDetections = {};
+
   /// Plätze, die schon einmal erkannt wurden. Bevor OpenStreetMap gefragt
   /// wird, wird hier geschaut. Der Spieler hat meist nur 1–2 Plätze.
   /// (Später in SQLite gespeichert, dann auch mit Korrekturen von Hand.)
@@ -59,7 +64,15 @@ class SessionProvider extends ChangeNotifier {
 
   /// Platz einer Einheit erkennen: erst bei den bekannten Plätzen schauen,
   /// sonst in OpenStreetMap suchen.
-  Future<void> detectPitch(int id) async {
+  Future<void> detectPitch(int id) {
+    // Wichtig: Callback mit { } statt =>. Mit => würde remove() den Future
+    // selbst zurückgeben, whenComplete würde auf ihn warten → wartet ewig.
+    return _runningDetections[id] ??= _detectPitch(id).whenComplete(() {
+      _runningDetections.remove(id);
+    });
+  }
+
+  Future<void> _detectPitch(int id) async {
     final session = sessionById(id);
     _pitchStatus[id] = PitchStatus.searching;
     notifyListeners();
@@ -74,6 +87,26 @@ class SessionProvider extends ChangeNotifier {
 
     _replace(session.withPitch(pitch));
     _pitchStatus[id] = pitch == null ? PitchStatus.notFound : PitchStatus.found;
+    notifyListeners();
+  }
+
+  /// Platz von Hand korrigiert oder festgelegt. Gilt für alle Einheiten, die
+  /// bisher denselben Platz hatten, und wird als bekannter Platz gemerkt.
+  void setPitch(int sessionId, Pitch corrected) {
+    final old = sessionById(sessionId).pitch;
+
+    if (old != null && _knownPitches.contains(old)) {
+      _knownPitches[_knownPitches.indexOf(old)] = corrected;
+    } else {
+      _knownPitches.add(corrected);
+    }
+
+    for (final s in List.of(_sessions)) {
+      if (s.id == sessionId || (old != null && identical(s.pitch, old))) {
+        _replace(s.withPitch(corrected));
+        _pitchStatus[s.id] = PitchStatus.found;
+      }
+    }
     notifyListeners();
   }
 

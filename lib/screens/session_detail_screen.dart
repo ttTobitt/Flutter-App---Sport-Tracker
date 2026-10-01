@@ -9,6 +9,7 @@ import '../utils/format.dart';
 import '../widgets/common_widgets.dart';
 import '../widgets/pitch_view.dart';
 import '../widgets/speed_chart.dart';
+import 'pitch_edit_screen.dart';
 
 /// Detail-Ansicht einer Einheit: Kennzahlen, Heatmap/Laufweg,
 /// Geschwindigkeitsverlauf und Zeit pro Geschwindigkeitszone.
@@ -100,16 +101,48 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                 ),
                 const SizedBox(height: 12),
                 switch (pitchStatus) {
-                  PitchStatus.found => PitchView(session: session, mode: _pitchMode),
+                  PitchStatus.found => Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        PitchView(session: session, mode: _pitchMode),
+                        Row(
+                          children: [
+                            // Lizenz der OSM-Daten (ODbL) verlangt diesen Hinweis
+                            if (session.pitch!.fromOsm)
+                              const Text(
+                                'Platz: © OpenStreetMap-Mitwirkende',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.textMuted,
+                                ),
+                              ),
+                            const Spacer(),
+                            TextButton(
+                              onPressed: () => _editPitch(session.id),
+                              child: const Text('Platz anpassen'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   PitchStatus.searching => const _PitchPlaceholder(
                       text: 'Platz wird gesucht …',
                       busy: true,
                     ),
                   PitchStatus.notFound => _PitchPlaceholder(
                       text: 'Kein Fußballplatz gefunden.',
-                      action: TextButton(
-                        onPressed: () => provider.detectPitch(session.id),
-                        child: const Text('Nochmal suchen'),
+                      action: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          TextButton(
+                            onPressed: () => provider.detectPitch(session.id),
+                            child: const Text('Nochmal suchen'),
+                          ),
+                          TextButton(
+                            onPressed: () => _editPitch(session.id),
+                            child: const Text('Von Hand festlegen'),
+                          ),
+                        ],
                       ),
                     ),
                 },
@@ -186,6 +219,13 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  void _editPitch(int sessionId) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => PitchEditScreen(sessionId: sessionId)),
     );
   }
 

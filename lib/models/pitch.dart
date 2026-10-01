@@ -17,12 +17,17 @@ class Pitch {
   final double length; // m
   final double width; // m
 
+  /// Stammt der Platz (auch nach Korrektur) aus OpenStreetMap? Dann muss die
+  /// App laut Lizenz (ODbL) „© OpenStreetMap-Mitwirkende“ anzeigen.
+  final bool fromOsm;
+
   const Pitch({
     required this.centerLat,
     required this.centerLon,
     this.rotationDeg = 0,
     this.length = 105,
     this.width = 68,
+    this.fromOsm = false,
   });
 
   // Ungefähre Meter pro Grad. Auf einem Fußballplatz (ca. 100 m) ist der

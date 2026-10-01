@@ -70,15 +70,8 @@ Pitch? pitchFromPolygon(List<LatLng> polygon) {
     (length, width) = (width, length);
     angle += pi / 2;
   }
-  // Auf -90° … 90° bringen. Welches Tor „vorne“ ist, weiß man aus dem Umriss
-  // ohnehin nicht.
-  var deg = angle * 180 / pi;
-  while (deg > 90) {
-    deg -= 180;
-  }
-  while (deg <= -90) {
-    deg += 180;
-  }
+  // Welches Tor „vorne“ ist, weiß man aus dem Umriss ohnehin nicht
+  final deg = normalizePitchAngle(angle * 180 / pi);
 
   return Pitch(
     centerLat: lat0 + bestCenter!.y / mPerDegLat,
@@ -86,7 +79,20 @@ Pitch? pitchFromPolygon(List<LatLng> polygon) {
     rotationDeg: deg,
     length: length,
     width: width,
+    fromOsm: true,
   );
+}
+
+/// Winkel auf -90° … 90° bringen. Ein um 180° gedrehter Platz ist derselbe
+/// Platz, nur mit vertauschten Toren.
+double normalizePitchAngle(double deg) {
+  while (deg > 90) {
+    deg -= 180;
+  }
+  while (deg <= -90) {
+    deg += 180;
+  }
+  return deg;
 }
 
 /// Liegt der Punkt auf dem Platz? [marginM] erlaubt etwas Spielraum

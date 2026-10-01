@@ -92,6 +92,37 @@ class _PitchViewState extends State<PitchView> {
   }
 }
 
+/// Linien eines Fußballfelds nach Regelwerk (Maße in Metern).
+/// [toPx] rechnet Platz-Meter in Bildschirm-Pixel um, [scale] ist Pixel pro Meter.
+void paintPitchMarkings(
+  Canvas canvas,
+  Offset Function(Offset) toPx,
+  double scale,
+  double length,
+  double width, {
+  Color color = const Color(0xBFFFFFFF),
+  double strokeWidth = 1.5,
+}) {
+  final paint = Paint()
+    ..color = color
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = strokeWidth;
+  final l = length, w = width;
+
+  Rect rect(double x, double y, double rw, double rh) =>
+      Rect.fromPoints(toPx(Offset(x, y)), toPx(Offset(x + rw, y + rh)));
+
+  canvas.drawRect(rect(0, 0, l, w), paint); // Außenlinien
+  canvas.drawLine(toPx(Offset(l / 2, 0)), toPx(Offset(l / 2, w)), paint);
+  canvas.drawCircle(toPx(Offset(l / 2, w / 2)), 9.15 * scale, paint);
+  // Strafräume (16,5 m tief, 40,3 m breit)
+  canvas.drawRect(rect(0, (w - 40.3) / 2, 16.5, 40.3), paint);
+  canvas.drawRect(rect(l - 16.5, (w - 40.3) / 2, 16.5, 40.3), paint);
+  // Torräume (5,5 m tief, 18,3 m breit)
+  canvas.drawRect(rect(0, (w - 18.3) / 2, 5.5, 18.3), paint);
+  canvas.drawRect(rect(l - 5.5, (w - 18.3) / 2, 5.5, 18.3), paint);
+}
+
 class _PitchPainter extends CustomPainter {
   final Session session;
   final PitchMode mode;
@@ -128,9 +159,9 @@ class _PitchPainter extends CustomPainter {
     switch (mode) {
       case PitchMode.heatmap:
         _paintHeatmap(canvas, field);
-        _paintLines(canvas, scale, toPx);
+        paintPitchMarkings(canvas, toPx, scale, _length, _width);
       case PitchMode.route:
-        _paintLines(canvas, scale, toPx);
+        paintPitchMarkings(canvas, toPx, scale, _length, _width);
         _paintRoute(canvas, toPx);
     }
   }
@@ -147,28 +178,6 @@ class _PitchPainter extends CustomPainter {
       field,
       Paint()..filterQuality = FilterQuality.medium,
     );
-  }
-
-  /// Linien eines Fußballfelds nach Regelwerk (Maße in Metern)
-  void _paintLines(Canvas canvas, double scale, Offset Function(Offset) toPx) {
-    final paint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.75)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
-    final l = _length, w = _width;
-
-    Rect rect(double x, double y, double rw, double rh) =>
-        Rect.fromPoints(toPx(Offset(x, y)), toPx(Offset(x + rw, y + rh)));
-
-    canvas.drawRect(rect(0, 0, l, w), paint); // Außenlinien
-    canvas.drawLine(toPx(Offset(l / 2, 0)), toPx(Offset(l / 2, w)), paint);
-    canvas.drawCircle(toPx(Offset(l / 2, w / 2)), 9.15 * scale, paint);
-    // Strafräume (16,5 m tief, 40,3 m breit)
-    canvas.drawRect(rect(0, (w - 40.3) / 2, 16.5, 40.3), paint);
-    canvas.drawRect(rect(l - 16.5, (w - 40.3) / 2, 16.5, 40.3), paint);
-    // Torräume (5,5 m tief, 18,3 m breit)
-    canvas.drawRect(rect(0, (w - 18.3) / 2, 5.5, 18.3), paint);
-    canvas.drawRect(rect(l - 5.5, (w - 18.3) / 2, 5.5, 18.3), paint);
   }
 
   /// Laufweg: der ganze Weg dünn und halbtransparent, Sprints kräftig darüber.
