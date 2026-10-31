@@ -4,13 +4,23 @@ import 'package:sporttrackerflutterapp/providers/session_provider.dart';
 import 'package:sporttrackerflutterapp/screens/history_screen.dart';
 import 'package:sporttrackerflutterapp/screens/start_screen.dart';
 import 'package:sporttrackerflutterapp/services/ble_service.dart';
+import 'package:sporttrackerflutterapp/services/session_database.dart';
 import 'package:sporttrackerflutterapp/theme/app_theme.dart';
 
-void main() {
+Future<void> main() async {
+  // Nötig, weil vor runApp schon auf Android (Datenbank) zugegriffen wird
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Datenbank öffnen und alle gespeicherten Einheiten laden, bevor die
+  // erste Seite gezeichnet wird. So ist der Verlauf nie kurz leer.
+  final db = await SessionDatabase.open();
+  final sessions = SessionProvider(db);
+  await sessions.load();
+
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => SessionProvider()),
+        ChangeNotifierProvider.value(value: sessions),
         Provider<BleService>(
           create: (_) => BleService(),
           dispose: (_, service) => service.dispose(),
