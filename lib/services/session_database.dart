@@ -101,6 +101,11 @@ class SessionDatabase {
         'points': encodePoints(session.points),
       });
 
+  /// Einheit endgültig löschen. Ihr Platz bleibt gespeichert, damit er bei
+  /// der nächsten Einheit dort ohne OpenStreetMap-Anfrage erkannt wird.
+  Future<void> deleteSession(int sessionId) =>
+      _db.delete('sessions', where: 'id = ?', whereArgs: [sessionId]);
+
   Future<void> setSessionType(int sessionId, SessionType type) =>
       _db.update('sessions', {'type': type.name}, where: 'id = ?', whereArgs: [sessionId]);
 

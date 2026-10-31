@@ -29,12 +29,23 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     // Immer die aktuelle Version aus dem Provider holen: Wird der Platz erst
     // nach dem Öffnen erkannt, ersetzt der Provider die Einheit.
     final provider = context.watch<SessionProvider>();
-    final session = provider.sessionById(widget.session.id);
+    final session = provider.findSession(widget.session.id);
+    // Gerade gelöscht: Die Seite klappt noch zu, bis dahin leer zeichnen
+    if (session == null) return const Scaffold();
     final pitchStatus = provider.pitchStatusOf(session.id);
     final a = session.analysis;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Verlauf')),
+      appBar: AppBar(
+        title: const Text('Verlauf'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.delete_outline),
+            tooltip: 'Einheit löschen',
+            onPressed: () => _confirmDelete(session.id),
+          ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
         children: [
@@ -260,6 +271,35 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     }
     return 'Halbzeitpause ${ht.start.inMinutes}′–${ht.end.inMinutes}′ erkannt. '
         'Die 2. Halbzeit ist gedreht, damit die Heatmap zur 1. passt.';
+  }
+
+  /// Erst nachfragen, dann zurück zum Verlauf und löschen
+  Future<void> _confirmDelete(int sessionId) async {
+    final delete = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Einheit löschen?'),
+        content: const Text(
+          'Die Einheit wird endgültig gelöscht und lässt sich nicht '
+          'wiederherstellen.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Abbrechen'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.danger),
+            child: const Text('Löschen'),
+          ),
+        ],
+      ),
+    );
+    if (delete != true || !mounted) return;
+    final provider = context.read<SessionProvider>();
+    Navigator.pop(context);
+    await provider.deleteSession(sessionId);
   }
 
   void _editPitch(int sessionId) {

@@ -48,6 +48,10 @@ class SessionProvider extends ChangeNotifier {
 
   Session sessionById(int id) => _sessions.firstWhere((s) => s.id == id);
 
+  /// Wie [sessionById], aber null statt Fehler, wenn es die Einheit (nicht
+  /// mehr) gibt, z. B. weil sie gerade gelöscht wurde
+  Session? findSession(int id) => _sessions.where((s) => s.id == id).firstOrNull;
+
   PitchStatus pitchStatusOf(int id) => _pitchStatus[id] ?? PitchStatus.notFound;
 
   /// Alle gespeicherten Einheiten und Plätze aus der Datenbank holen. Wird
@@ -69,7 +73,9 @@ class SessionProvider extends ChangeNotifier {
   /// Legt eine Test-Einheit an. Jede neue liegt zwei Tage vor der vorherigen,
   /// damit der Verlauf nach mehreren Tagen aussieht. Jede zweite ist ein Spiel.
   Future<void> addMockSession() async {
-    final n = _sessions.length + 1;
+    // Höchste ID + 1 statt Anzahl + 1: Nach dem Löschen einer Einheit gäbe es
+    // sonst zweimal dieselbe Beispiel-Einheit
+    final n = _sessions.fold(0, (m, s) => s.id > m ? s.id : m) + 1;
     final today = DateTime.now();
     final start = DateTime(today.year, today.month, today.day, 18, 30)
         .subtract(Duration(days: 2 * (n - 1)));
@@ -121,7 +127,10 @@ class SessionProvider extends ChangeNotifier {
   }
 
   Future<void> _detectPitch(int id) async {
-    final session = sessionById(id);
+    // Die Einheit kann gelöscht worden sein, während sie in der Warteschlange
+    // stand oder OpenStreetMap gefragt wurde
+    final session = findSession(id);
+    if (session == null) return;
     var pitch = choosePitch(_pitchIds.keys.toList(), session.points);
     if (pitch == null) {
       final polygons = await _pitchService.findPitchesAround(centroid(session.points));
@@ -130,8 +139,10 @@ class SessionProvider extends ChangeNotifier {
       if (pitch != null) _pitchIds[pitch] = await _db.insertPitch(pitch);
     }
 
+    final current = findSession(id);
+    if (current == null) return;
     await _db.setSessionPitch(id, pitch == null ? null : _pitchIds[pitch]);
-    _replace(sessionById(id).withPitch(pitch));
+    _replace(current.withPitch(pitch));
     _pitchStatus[id] = pitch == null ? PitchStatus.notFound : PitchStatus.found;
     notifyListeners();
   }
@@ -160,6 +171,14 @@ class SessionProvider extends ChangeNotifier {
         _pitchStatus[s.id] = PitchStatus.found;
       }
     }
+    notifyListeners();
+  }
+
+  /// Einheit endgültig löschen (in der Datenbank und in der Liste)
+  Future<void> deleteSession(int id) async {
+    await _db.deleteSession(id);
+    _sessions.removeWhere((s) => s.id == id);
+    _pitchStatus.remove(id);
     notifyListeners();
   }
 

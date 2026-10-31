@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sporttrackerflutterapp/providers/session_provider.dart';
@@ -6,10 +8,18 @@ import 'package:sporttrackerflutterapp/screens/start_screen.dart';
 import 'package:sporttrackerflutterapp/services/ble_service.dart';
 import 'package:sporttrackerflutterapp/services/session_database.dart';
 import 'package:sporttrackerflutterapp/theme/app_theme.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 Future<void> main() async {
   // Nötig, weil vor runApp schon auf Android (Datenbank) zugegriffen wird
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Am PC (zum Ausprobieren ohne Handy) gibt es das SQLite von Android nicht,
+  // dort wird die PC-Variante verwendet, wie in den Tests
+  if (Platform.isLinux || Platform.isWindows) {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  }
 
   // Datenbank öffnen und alle gespeicherten Einheiten laden, bevor die
   // erste Seite gezeichnet wird. So ist der Verlauf nie kurz leer.

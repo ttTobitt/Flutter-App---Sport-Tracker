@@ -90,6 +90,45 @@ void main() {
     await db.close();
   });
 
+  test('Gelöschte Einheit ist weg, auch nach Neustart, der Platz bleibt', () async {
+    var db = await openDb();
+    final fake = FakePitchService();
+    final provider = SessionProvider(db, pitchService: fake);
+    await provider.addMockSession();
+    await provider.addMockSession();
+    await Future.wait([provider.detectPitch(1), provider.detectPitch(2)]);
+
+    await provider.deleteSession(1);
+    expect(provider.sessions.map((s) => s.id), [2]);
+    expect(provider.findSession(1), isNull);
+    await db.close();
+
+    db = await openDb();
+    final after = SessionProvider(db, pitchService: fake);
+    await after.load();
+    expect(after.sessions.map((s) => s.id), [2]);
+
+    // Neue Einheit am selben Platz: Platz ist noch bekannt, keine OSM-Anfrage
+    final before = fake.requests;
+    await after.addMockSession();
+    final newId = after.latest!.id;
+    await after.detectPitch(newId);
+    expect(after.sessionById(newId).pitch, same(after.sessionById(2).pitch));
+    expect(fake.requests, before);
+    await db.close();
+  });
+
+  test('Löschen während der Platzsuche führt zu keinem Fehler', () async {
+    final db = await openDb();
+    final provider = SessionProvider(db, pitchService: FakePitchService());
+    await provider.addMockSession(); // startet die Platzsuche im Hintergrund
+    final search = provider.detectPitch(1);
+    await provider.deleteSession(1);
+    await search;
+    expect(provider.sessions, isEmpty);
+    await db.close();
+  });
+
   test('Nach Neustart der App sind Einheiten, Typ und Platz noch da', () async {
     var db = await openDb();
     final before = SessionProvider(db, pitchService: FakePitchService());
