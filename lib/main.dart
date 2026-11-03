@@ -3,10 +3,12 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sporttrackerflutterapp/providers/session_provider.dart';
+import 'package:sporttrackerflutterapp/providers/tracker_sync.dart';
 import 'package:sporttrackerflutterapp/screens/history_screen.dart';
 import 'package:sporttrackerflutterapp/screens/start_screen.dart';
 import 'package:sporttrackerflutterapp/services/ble_service.dart';
 import 'package:sporttrackerflutterapp/services/session_database.dart';
+import 'package:sporttrackerflutterapp/services/tracker_client.dart';
 import 'package:sporttrackerflutterapp/theme/app_theme.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -27,14 +29,25 @@ Future<void> main() async {
   final sessions = SessionProvider(db);
   await sessions.load();
 
+  // Sobald ein Tracker verbunden ist, nachsehen, welche Einheiten er hat.
+  // Bei Trennung die Übertragung zurücksetzen.
+  final ble = BleService();
+  final sync = TrackerSync(sessions);
+  ble.connectionStatus.addListener(() {
+    final link = ble.link;
+    if (ble.connectionStatus.value == BleConnectionStatus.connected && link != null) {
+      sync.check(TrackerClient(link));
+    } else if (ble.connectionStatus.value != BleConnectionStatus.scanning) {
+      sync.reset();
+    }
+  });
+
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider.value(value: sessions),
-        Provider<BleService>(
-          create: (_) => BleService(),
-          dispose: (_, service) => service.dispose(),
-        ),
+        ChangeNotifierProvider.value(value: sync),
+        Provider<BleService>.value(value: ble),
       ],
       child: const SportTrackerApp(),
     ),

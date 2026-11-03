@@ -3,9 +3,11 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
-import '../models/sensor_data.dart';
+import 'tracker_client.dart';
 
-/// Verwaltet BLE-Scan, Verbindung und Notification-Stream.
+/// Verwaltet BLE-Scan und Verbindung. Nach dem Verbinden steht über [link]
+/// die Leitung zum Tracker bereit, über die `TrackerClient` die Befehle
+/// aus vault/BLE-Protokoll.md schickt.
 enum BleConnectionStatus {
   disconnected,
   scanning,
@@ -24,10 +26,12 @@ class TrackerUuids {
 class BleService {
   StreamSubscription<List<ScanResult>>? _scanSubscription;
   StreamSubscription<BluetoothConnectionState>? _connectionSubscription;
-  StreamSubscription<List<int>>? _notifySubscription;
 
   BluetoothDevice? _device;
-  BluetoothCharacteristic? _notifyCharacteristic;
+  TrackerLink? _link;
+
+  /// Leitung zum Tracker, null solange keiner verbunden ist
+  TrackerLink? get link => _link;
 
   final ValueNotifier<BleConnectionStatus> connectionStatus =
       ValueNotifier(BleConnectionStatus.disconnected);
@@ -61,81 +65,71 @@ class BleService {
 
   Future<void> stopScan() async {
     await FlutterBluePlus.stopScan();
-    connectionStatus.value = BleConnectionStatus.disconnected;
+    // Nur zurücksetzen, wenn noch gesucht wurde. Ist inzwischen ein Tracker
+    // verbunden (Suche wird beim Schließen der Seite gestoppt), bleibt das so.
+    if (connectionStatus.value == BleConnectionStatus.scanning) {
+      connectionStatus.value = BleConnectionStatus.disconnected;
+    }
   }
 
   Future<void> connect(BluetoothDevice device) async {
     try {
       errorMessage.value = '';
       _device = device;
+      // Android verbindet zuverlässiger, wenn nicht gleichzeitig gesucht wird
+      await FlutterBluePlus.stopScan();
 
+      // flutter_blue_plus fragt auf Android dabei automatisch eine große MTU
+      // an (512). Der Tracker kann 247, ausgehandelt wird das kleinere.
       await device.connect(autoConnect: false);
-      _connectionSubscription?.cancel();
+      _link = await _findTracker(device);
+
+      // Erst jetzt „verbunden“ melden: Wer darauf reagiert (TrackerSync),
+      // kann dann sofort Befehle schicken.
+      connectionStatus.value = BleConnectionStatus.connected;
+
+      await _connectionSubscription?.cancel();
       _connectionSubscription = device.connectionState.listen((state) {
-        if (state == BluetoothConnectionState.connected) {
-          connectionStatus.value = BleConnectionStatus.connected;
-        } else if (state == BluetoothConnectionState.disconnected) {
+        if (state == BluetoothConnectionState.disconnected) {
+          _link = null;
           connectionStatus.value = BleConnectionStatus.disconnected;
         }
       });
-
-      await discoverServices();
     } catch (e) {
+      _link = null;
       errorMessage.value = e.toString();
       connectionStatus.value = BleConnectionStatus.error;
+      // Halb aufgebaute Verbindung wieder trennen, Fehler dabei egal
+      await device.disconnect().catchError((_) {});
     }
   }
 
-  Future<void> discoverServices() async {
-    if (_device == null) {
-      throw Exception('Kein Gerät verbunden.');
+  /// Service und die beiden Characteristics über ihre UUIDs suchen und die
+  /// Notifications der Daten-Characteristic einschalten
+  Future<TrackerLink> _findTracker(BluetoothDevice device) async {
+    final services = await device.discoverServices();
+    final service = services.where((s) => s.uuid == TrackerUuids.service).firstOrNull;
+    if (service == null) {
+      throw Exception('Das Gerät ist kein Sporttracker (Service fehlt).');
+    }
+    BluetoothCharacteristic find(Guid uuid) {
+      final c = service.characteristics.where((c) => c.uuid == uuid).firstOrNull;
+      if (c == null) throw Exception('Characteristic $uuid fehlt am Tracker.');
+      return c;
     }
 
-    final services = await _device!.discoverServices();
-    for (final service in services) {
-      for (final characteristic in service.characteristics) {
-        if (characteristic.properties.notify || characteristic.properties.indicate) {
-          _notifyCharacteristic = characteristic;
-          break;
-        }
-      }
-      if (_notifyCharacteristic != null) {
-        break;
-      }
-    }
-
-    if (_notifyCharacteristic == null) {
-      throw Exception('Keine Notify-Characteristic gefunden.');
-    }
-  }
-
-  Future<void> subscribeToSensorData(
-    void Function(SensorData data) onData,
-  ) async {
-    if (_notifyCharacteristic == null) {
-      await discoverServices();
-    }
-
-    if (_notifyCharacteristic == null) {
-      throw Exception('Keine Notify-Characteristic gefunden.');
-    }
-
-    _notifySubscription?.cancel();
-    await _notifyCharacteristic!.setNotifyValue(true);
-    _notifySubscription = _notifyCharacteristic!.lastValueStream.listen((value) {
-      if (value.isEmpty) {
-        return;
-      }
-      final sensorData = SensorData.fromBytes(value);
-      onData(sensorData);
-    });
+    final commands = find(TrackerUuids.commands);
+    final data = find(TrackerUuids.data);
+    // Muss vor dem ersten Befehl passieren, sonst bricht der Tracker die
+    // Übertragung ab (er sendet nur, wenn jemand zuhört)
+    await data.setNotifyValue(true);
+    return _BleTrackerLink(commands, data);
   }
 
   Future<void> disconnect() async {
     try {
-      await _notifySubscription?.cancel();
       await _device?.disconnect();
-      _notifyCharacteristic = null;
+      _link = null;
       connectionStatus.value = BleConnectionStatus.disconnected;
     } catch (e) {
       errorMessage.value = e.toString();
@@ -146,8 +140,26 @@ class BleService {
   void dispose() {
     unawaited(_scanSubscription?.cancel());
     unawaited(_connectionSubscription?.cancel());
-    unawaited(_notifySubscription?.cancel());
     unawaited(FlutterBluePlus.stopScan());
     scanResults.value = const <ScanResult>[];
   }
+}
+
+/// [TrackerLink] über Bluetooth: Befehle auf die Befehls-Characteristic
+/// schreiben, Notifications der Daten-Characteristic weiterreichen
+class _BleTrackerLink implements TrackerLink {
+  final BluetoothCharacteristic _commands;
+  final BluetoothCharacteristic _data;
+
+  _BleTrackerLink(this._commands, this._data);
+
+  // onValueReceived liefert nur echte Notifications (lastValueStream würde
+  // auch den zuletzt bekannten Wert wiederholen)
+  @override
+  Stream<List<int>> get notifications => _data.onValueReceived;
+
+  // Mit Antwort schreiben: Die Firmware erlaubt nur „Write“, nicht „Write
+  // without response“
+  @override
+  Future<void> write(List<int> command) => _commands.write(command);
 }

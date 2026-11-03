@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 
 import '../models/pitch.dart';
+import '../models/sensor_data.dart';
 import '../models/session.dart';
 import '../services/mock_session.dart';
 import '../services/pitch_detection.dart';
@@ -87,8 +88,16 @@ class SessionProvider extends ChangeNotifier {
     ));
   }
 
-  /// Neue Einheit speichern (später: direkt nach der BLE-Übertragung).
-  /// Der Platz wird danach im Hintergrund gesucht.
+  /// Gibt es schon eine Einheit, die genau zu diesem Zeitpunkt beginnt?
+  /// Damit wird verhindert, dass eine Einheit doppelt übertragen wird.
+  bool hasSessionStartingAt(DateTime start) => _sessions.any((s) => s.start == start);
+
+  /// Eine vom Tracker übertragene Einheit speichern
+  Future<void> addReceivedSession(List<SensorData> points) =>
+      _addSession(Session(id: 0, points: points)); // id vergibt die Datenbank
+
+  /// Neue Einheit speichern (vom Tracker oder Testdaten). Der Platz wird
+  /// danach im Hintergrund gesucht.
   Future<void> _addSession(Session received) async {
     // Typ vorschlagen: Gibt es eine Halbzeitpause, ist es vermutlich ein Spiel.
     // Der Nutzer kann es im Detail-Screen ändern.

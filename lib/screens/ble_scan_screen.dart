@@ -83,9 +83,8 @@ class _BleScanScreenState extends State<BleScanScreen> {
                               subtitle: Text(device.remoteId.str),
                               trailing: Text(result.rssi.toString()),
                               onTap: () async {
-                                // Verbinden und zurück zur Startseite. Das
-                                // Abholen der Einheiten kommt mit dem
-                                // BLE-Protokoll (Meilenstein 5).
+                                // Verbinden und zurück zur Startseite. Dort
+                                // zeigt TrackerSync die Einheiten am Tracker.
                                 await _bleService.connect(device);
                                 if (!context.mounted) return;
                                 if (_bleService.connectionStatus.value ==
