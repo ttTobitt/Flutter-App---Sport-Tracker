@@ -70,6 +70,8 @@ flutter:
   # Start aus dem Internet laden muss (Lizenz: assets/google_fonts/OFL.txt)
   assets:
     - assets/google_fonts/
+    # Fußballplätze Österreichs aus OpenStreetMap (tool/build_pitch_catalog.py)
+    - assets/osm/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

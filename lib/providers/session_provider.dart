@@ -21,7 +21,7 @@ class SessionProvider extends ChangeNotifier {
   final PitchService _pitchService;
 
   SessionProvider(this._db, {PitchService? pitchService})
-      : _pitchService = pitchService ?? PitchService();
+    : _pitchService = pitchService ?? PitchService();
 
   final List<Session> _sessions = [];
   final Map<int, PitchStatus> _pitchStatus = {};
@@ -51,7 +51,8 @@ class SessionProvider extends ChangeNotifier {
 
   /// Wie [sessionById], aber null statt Fehler, wenn es die Einheit (nicht
   /// mehr) gibt, z. B. weil sie gerade gelöscht wurde
-  Session? findSession(int id) => _sessions.where((s) => s.id == id).firstOrNull;
+  Session? findSession(int id) =>
+      _sessions.where((s) => s.id == id).firstOrNull;
 
   PitchStatus pitchStatusOf(int id) => _pitchStatus[id] ?? PitchStatus.notFound;
 
@@ -78,19 +79,27 @@ class SessionProvider extends ChangeNotifier {
     // sonst zweimal dieselbe Beispiel-Einheit
     final n = _sessions.fold(0, (m, s) => s.id > m ? s.id : m) + 1;
     final today = DateTime.now();
-    final start = DateTime(today.year, today.month, today.day, 18, 30)
-        .subtract(Duration(days: 2 * (n - 1)));
-    await _addSession(MockSessionGenerator.generate(
-      id: n, // nur vorläufig, die echte ID vergibt die Datenbank
-      start: start,
-      duration: Duration(minutes: 75 + (n * 7) % 20),
-      isMatch: n.isEven,
-    ));
+    final start = DateTime(
+      today.year,
+      today.month,
+      today.day,
+      18,
+      30,
+    ).subtract(Duration(days: 2 * (n - 1)));
+    await _addSession(
+      MockSessionGenerator.generate(
+        id: n, // nur vorläufig, die echte ID vergibt die Datenbank
+        start: start,
+        duration: Duration(minutes: 75 + (n * 7) % 20),
+        isMatch: n.isEven,
+      ),
+    );
   }
 
   /// Gibt es schon eine Einheit, die genau zu diesem Zeitpunkt beginnt?
   /// Damit wird verhindert, dass eine Einheit doppelt übertragen wird.
-  bool hasSessionStartingAt(DateTime start) => _sessions.any((s) => s.start == start);
+  bool hasSessionStartingAt(DateTime start) =>
+      _sessions.any((s) => s.start == start);
 
   /// Eine vom Tracker übertragene Einheit speichern
   Future<void> addReceivedSession(List<SensorData> points) =>
@@ -101,9 +110,15 @@ class SessionProvider extends ChangeNotifier {
   Future<void> _addSession(Session received) async {
     // Typ vorschlagen: Gibt es eine Halbzeitpause, ist es vermutlich ein Spiel.
     // Der Nutzer kann es im Detail-Screen ändern.
-    if (received.halftime != null) received = received.withType(SessionType.match);
+    if (received.halftime != null) {
+      received = received.withType(SessionType.match);
+    }
     final id = await _db.insertSession(received);
-    final session = Session(id: id, points: received.points, type: received.type);
+    final session = Session(
+      id: id,
+      points: received.points,
+      type: received.type,
+    );
     _sessions.add(session);
     _sessions.sort((a, b) => b.start.compareTo(a.start));
     notifyListeners();
@@ -142,17 +157,59 @@ class SessionProvider extends ChangeNotifier {
     if (session == null) return;
     var pitch = choosePitch(_pitchIds.keys.toList(), session.points);
     if (pitch == null) {
-      final polygons = await _pitchService.findPitchesAround(centroid(session.points));
-      final candidates = polygons.map(pitchFromPolygon).whereType<Pitch>().toList();
-      pitch = choosePitch(candidates, session.points);
+      // Erst in der Platz-Liste der App (sofort, ohne Internet), dann online.
+      // Online auch dann, wenn die Liste Plätze kennt, aber keiner passt:
+      // Der richtige kann neu in OSM eingetragen sein.
+      final center = centroid(session.points);
+      for (final search in [
+        _pitchService.localPitchesAround,
+        _pitchService.findPitchesAround,
+      ]) {
+        final polygons = await search(center);
+        final candidates = polygons
+            .map(pitchFromPolygon)
+            .whereType<Pitch>()
+            .toList();
+        pitch = choosePitch(candidates, session.points);
+        if (pitch != null) break;
+      }
       if (pitch != null) _pitchIds[pitch] = await _db.insertPitch(pitch);
     }
-
     final current = findSession(id);
     if (current == null) return;
     await _db.setSessionPitch(id, pitch == null ? null : _pitchIds[pitch]);
     _replace(current.withPitch(pitch));
     _pitchStatus[id] = pitch == null ? PitchStatus.notFound : PitchStatus.found;
+    notifyListeners();
+  }
+
+  /// Platz aus der Liste ausgewählt („Platz auswählen“). Anders als
+  /// [setPitch] gilt das nur für diese eine Einheit: Der vorher erkannte
+  /// (falsche) Platz ist ja ein echter Platz, auf dem andere Einheiten liegen
+  /// können. Ist der gewählte Platz schon bekannt, wird er wiederverwendet.
+  Future<void> assignPitch(int sessionId, Pitch chosen) async {
+    // Derselbe Platz = die Mitte des einen liegt im anderen und umgekehrt
+    var pitch = _pitchIds.keys
+        .where(
+          (p) =>
+              pitchContains(
+                p,
+                chosen.centerLat,
+                chosen.centerLon,
+                marginM: 0,
+              ) &&
+              pitchContains(chosen, p.centerLat, p.centerLon, marginM: 0),
+        )
+        .firstOrNull;
+    if (pitch == null) {
+      pitch = chosen;
+      _pitchIds[pitch] = await _db.insertPitch(pitch);
+    }
+    await _db.setSessionPitch(sessionId, _pitchIds[pitch]);
+    final session = findSession(sessionId);
+    if (session == null) return;
+    _replace(session.withPitch(pitch));
+    _pitchStatus[sessionId] = PitchStatus.found;
     notifyListeners();
   }
 

@@ -11,6 +11,7 @@ import '../services/pitch_detection.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common_widgets.dart';
 import '../widgets/pitch_view.dart';
+import 'pitch_picker_screen.dart';
 
 /// Platz am Luftbild korrigieren oder von Hand festlegen.
 ///
@@ -43,7 +44,9 @@ class _PitchEditScreenState extends State<PitchEditScreen> {
   @override
   void initState() {
     super.initState();
-    final session = context.read<SessionProvider>().sessionById(widget.sessionId);
+    final session = context.read<SessionProvider>().sessionById(
+      widget.sessionId,
+    );
     _original = session.pitch;
     // Laufweg als Orientierungshilfe, 1 Punkt pro Sekunde reicht
     _track = [
@@ -54,7 +57,9 @@ class _PitchEditScreenState extends State<PitchEditScreen> {
     final p = _original;
     _length = p?.length ?? 100;
     _width = p?.width ?? 64;
-    _initialCenter = p == null ? centroid(session.points) : LatLng(p.centerLat, p.centerLon);
+    _initialCenter = p == null
+        ? centroid(session.points)
+        : LatLng(p.centerLat, p.centerLon);
     // flutter_map dreht bei positiver rotation im Uhrzeigersinn. Dann zeigt
     // die waagrechte Bildschirmachse genau in Richtung „rotation“ (gegen den
     // Uhrzeigersinn von Osten aus), also wie Pitch.rotationDeg.
@@ -67,11 +72,27 @@ class _PitchEditScreenState extends State<PitchEditScreen> {
     final screenWidth = camera.nonRotatedSize.x;
     const earthCircumference = 2 * pi * 6378137;
     final metersPerPixel = _length / (0.8 * screenWidth);
-    final zoom = log(earthCircumference * cos(_initialCenter.latitude * pi / 180) /
-            (256 * metersPerPixel)) /
+    final zoom =
+        log(
+          earthCircumference *
+              cos(_initialCenter.latitude * pi / 180) /
+              (256 * metersPerPixel),
+        ) /
         ln2;
     _mapController.move(_initialCenter, zoom.clamp(15.0, 20.0));
     setState(() => _camera = _mapController.camera);
+  }
+
+  /// Falscher Platz? In der Liste einen anderen wählen. Wurde einer
+  /// gewählt, ist dieser Bildschirm fertig und geht auch zu.
+  Future<void> _pickOther() async {
+    final picked = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PitchPickerScreen(sessionId: widget.sessionId),
+      ),
+    );
+    if (picked == true && mounted) Navigator.pop(context);
   }
 
   void _save() {
@@ -95,6 +116,11 @@ class _PitchEditScreenState extends State<PitchEditScreen> {
       appBar: AppBar(
         title: Text(_original == null ? 'Platz festlegen' : 'Platz anpassen'),
         actions: [
+          IconButton(
+            tooltip: 'Anderen Platz suchen',
+            icon: const Icon(Icons.search),
+            onPressed: _pickOther,
+          ),
           TextButton(onPressed: _save, child: const Text('Speichern')),
         ],
       ),
@@ -112,13 +138,15 @@ class _PitchEditScreenState extends State<PitchEditScreen> {
                     maxZoom: 20,
                     minZoom: 15,
                     onMapReady: _zoomToPitch,
-                    onPositionChanged: (camera, _) => setState(() => _camera = camera),
+                    onPositionChanged: (camera, _) =>
+                        setState(() => _camera = camera),
                   ),
                   children: [
                     TileLayer(
                       urlTemplate: _orthoUrl,
                       maxNativeZoom: 19,
-                      userAgentPackageName: 'com.example.sporttrackerflutterapp',
+                      userAgentPackageName:
+                          'com.example.sporttrackerflutterapp',
                     ),
                     PolylineLayer(
                       polylines: [
@@ -133,7 +161,9 @@ class _PitchEditScreenState extends State<PitchEditScreen> {
                       attributions: [
                         const TextSourceAttribution('Luftbild: basemap.at'),
                         if (_original?.fromOsm ?? false)
-                          const TextSourceAttribution('Platz: © OpenStreetMap-Mitwirkende'),
+                          const TextSourceAttribution(
+                            'Platz: © OpenStreetMap-Mitwirkende',
+                          ),
                       ],
                     ),
                   ],
@@ -172,7 +202,11 @@ class _PitchOverlayPainter extends CustomPainter {
   final double length;
   final double width;
 
-  _PitchOverlayPainter({required this.camera, required this.length, required this.width});
+  _PitchOverlayPainter({
+    required this.camera,
+    required this.length,
+    required this.width,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -181,7 +215,8 @@ class _PitchOverlayPainter extends CustomPainter {
 
     // Meter pro Pixel bei der aktuellen Zoomstufe (Web-Mercator, 256-px-Kacheln)
     const earthCircumference = 2 * pi * 6378137;
-    final metersPerPixel = earthCircumference *
+    final metersPerPixel =
+        earthCircumference *
         cos(cam.center.latitude * pi / 180) /
         (256 * pow(2, cam.zoom));
     final scale = 1 / metersPerPixel; // Pixel pro Meter
@@ -298,7 +333,9 @@ class _Stepper extends StatelessWidget {
           children: [
             IconButton(
               tooltip: '$label −1 m',
-              onPressed: value > min ? () => onChanged(value.roundToDouble() - 1) : null,
+              onPressed: value > min
+                  ? () => onChanged(value.roundToDouble() - 1)
+                  : null,
               icon: const Icon(Icons.remove),
             ),
             Expanded(
@@ -310,7 +347,9 @@ class _Stepper extends StatelessWidget {
             ),
             IconButton(
               tooltip: '$label +1 m',
-              onPressed: value < max ? () => onChanged(value.roundToDouble() + 1) : null,
+              onPressed: value < max
+                  ? () => onChanged(value.roundToDouble() + 1)
+                  : null,
               icon: const Icon(Icons.add),
             ),
           ],

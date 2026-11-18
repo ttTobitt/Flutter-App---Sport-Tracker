@@ -10,6 +10,7 @@ import '../widgets/common_widgets.dart';
 import '../widgets/pitch_view.dart';
 import '../widgets/speed_chart.dart';
 import 'pitch_edit_screen.dart';
+import 'pitch_picker_screen.dart';
 
 /// Detail-Ansicht einer Einheit: Kennzahlen, Heatmap/Laufweg,
 /// Geschwindigkeitsverlauf und Zeit pro Geschwindigkeitszone.
@@ -64,7 +65,10 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
           // ── Training oder Spiel ──────────────────────────
           SegmentedButton<SessionType>(
             segments: const [
-              ButtonSegment(value: SessionType.training, label: Text('Training')),
+              ButtonSegment(
+                value: SessionType.training,
+                label: Text('Training'),
+              ),
               ButtonSegment(value: SessionType.match, label: Text('Spiel')),
             ],
             selected: {session.type},
@@ -81,33 +85,44 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
           const SizedBox(height: 18),
 
           // ── Kennzahlen ───────────────────────────────────
-          GridView.count(
-            crossAxisCount: 2,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 10,
-            crossAxisSpacing: 10,
-            childAspectRatio: 1.6,
+          // Zwei Reihen statt GridView: Die Höhe ergibt sich aus dem Inhalt,
+          // so passt es auch bei schmalen Handys oder großer Systemschrift.
+          Row(
             children: [
-              StatCard(
-                label: 'Distanz',
-                value: formatNumber(a.distanceKm),
-                unit: 'km',
+              Expanded(
+                child: StatCard(
+                  label: 'Distanz',
+                  value: formatNumber(a.distanceKm),
+                  unit: 'km',
+                ),
               ),
-              StatCard(
-                label: 'Sprints',
-                value: '${a.sprints.length}',
-                valueColor: AppColors.sprint,
+              const SizedBox(width: 10),
+              Expanded(
+                child: StatCard(
+                  label: 'Sprints',
+                  value: '${a.sprints.length}',
+                  valueColor: AppColors.sprint,
+                ),
               ),
-              StatCard(
-                label: 'Max',
-                value: formatNumber(a.maxSpeedKmh),
-                unit: 'km/h',
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: StatCard(
+                  label: 'Max',
+                  value: formatNumber(a.maxSpeedKmh),
+                  unit: 'km/h',
+                ),
               ),
-              StatCard(
-                label: 'Dauer',
-                value: '${minutesOf(session.duration)}',
-                unit: 'min',
+              const SizedBox(width: 10),
+              Expanded(
+                child: StatCard(
+                  label: 'Dauer',
+                  value: '${minutesOf(session.duration)}',
+                  unit: 'min',
+                ),
               ),
             ],
           ),
@@ -126,66 +141,86 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                     if (session.turnsSecondHalf)
                       const Text(
                         'Angriff →',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                   ],
                 ),
                 const SizedBox(height: 12),
                 SegmentedButton<PitchMode>(
                   segments: const [
-                    ButtonSegment(value: PitchMode.heatmap, label: Text('Heatmap')),
-                    ButtonSegment(value: PitchMode.route, label: Text('Laufweg')),
+                    ButtonSegment(
+                      value: PitchMode.heatmap,
+                      label: Text('Heatmap'),
+                    ),
+                    ButtonSegment(
+                      value: PitchMode.route,
+                      label: Text('Laufweg'),
+                    ),
                   ],
                   selected: {_pitchMode},
                   showSelectedIcon: false,
-                  onSelectionChanged: (s) => setState(() => _pitchMode = s.first),
+                  onSelectionChanged: (s) =>
+                      setState(() => _pitchMode = s.first),
                 ),
                 const SizedBox(height: 12),
                 switch (pitchStatus) {
                   PitchStatus.found => Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        PitchView(session: session, mode: _pitchMode),
-                        Row(
-                          children: [
-                            // Lizenz der OSM-Daten (ODbL) verlangt diesen Hinweis
-                            if (session.pitch!.fromOsm)
-                              const Text(
-                                'Platz: © OpenStreetMap-Mitwirkende',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: AppColors.textMuted,
-                                ),
-                              ),
-                            const Spacer(),
-                            TextButton(
-                              onPressed: () => _editPitch(session.id),
-                              child: const Text('Platz anpassen'),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  PitchStatus.searching => const _PitchPlaceholder(
-                      text: 'Platz wird gesucht …',
-                      busy: true,
-                    ),
-                  PitchStatus.notFound => _PitchPlaceholder(
-                      text: 'Kein Fußballplatz gefunden.',
-                      action: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      PitchView(session: session, mode: _pitchMode),
+                      Row(
                         children: [
-                          TextButton(
-                            onPressed: () => provider.detectPitch(session.id),
-                            child: const Text('Nochmal suchen'),
+                          // Lizenz der OSM-Daten (ODbL) verlangt diesen Hinweis
+                          // Expanded: Der Text bricht um, wenn der Platz
+                          // neben dem Knopf nicht reicht (schmale Handys)
+                          Expanded(
+                            child: session.pitch!.fromOsm
+                                ? const Text(
+                                    'Platz: © OpenStreetMap-Mitwirkende',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: AppColors.textMuted,
+                                    ),
+                                  )
+                                : const SizedBox.shrink(),
                           ),
                           TextButton(
                             onPressed: () => _editPitch(session.id),
-                            child: const Text('Von Hand festlegen'),
+                            child: const Text('Platz anpassen'),
                           ),
                         ],
                       ),
+                    ],
+                  ),
+                  PitchStatus.searching => const _PitchPlaceholder(
+                    text: 'Platz wird gesucht …',
+                    busy: true,
+                  ),
+                  PitchStatus.notFound => _PitchPlaceholder(
+                    text: 'Kein Fußballplatz gefunden.',
+                    // Wrap statt Row: Bei schmalen Handys rutschen die
+                    // Knöpfe in eine zweite Zeile statt überzulaufen
+                    action: Wrap(
+                      alignment: WrapAlignment.center,
+                      children: [
+                        TextButton(
+                          onPressed: () => provider.detectPitch(session.id),
+                          child: const Text('Nochmal suchen'),
+                        ),
+                        TextButton(
+                          onPressed: () => _pickPitch(session.id),
+                          child: const Text('Platz auswählen'),
+                        ),
+                        TextButton(
+                          onPressed: () => _editPitch(session.id),
+                          child: const Text('Von Hand festlegen'),
+                        ),
+                      ],
                     ),
+                  ),
                 },
               ],
             ),
@@ -302,6 +337,15 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     await provider.deleteSession(sessionId);
   }
 
+  void _pickPitch(int sessionId) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PitchPickerScreen(sessionId: sessionId),
+      ),
+    );
+  }
+
   void _editPitch(int sessionId) {
     Navigator.push(
       context,
@@ -317,13 +361,17 @@ class _ZoneRow extends StatelessWidget {
   final double share;
   final Color color;
 
-  const _ZoneRow({required this.zone, required this.share, required this.color});
+  const _ZoneRow({
+    required this.zone,
+    required this.share,
+    required this.color,
+  });
 
   String get _range => zone.toKmh.isInfinite
       ? '> ${zone.fromKmh.round()} km/h'
       : zone.fromKmh == 0
-          ? '< ${zone.toKmh.round()} km/h'
-          : '${zone.fromKmh.round()}–${zone.toKmh.round()} km/h';
+      ? '< ${zone.toKmh.round()} km/h'
+      : '${zone.fromKmh.round()}–${zone.toKmh.round()} km/h';
 
   @override
   Widget build(BuildContext context) {
@@ -334,10 +382,20 @@ class _ZoneRow extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(zone.name,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-              Text(_range,
-                  style: const TextStyle(fontSize: 11, color: AppColors.textMuted)),
+              Text(
+                zone.name,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Text(
+                _range,
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: AppColors.textMuted,
+                ),
+              ),
             ],
           ),
         ),

@@ -17,6 +17,11 @@ class FakePitchService extends PitchService {
   @override
   Future<List<List<LatLng>>> findPitchesAround(LatLng center, {int radiusInMeters = 300}) async =>
       [MockSessionGenerator.hartnerPolygon];
+
+  // Platz-Liste der App gibt es im Test nicht, alles kommt von „online“
+  @override
+  Future<List<List<LatLng>>> localPitchesAround(LatLng center, {int radiusInMeters = 300}) async =>
+      const [];
 }
 
 /// 10 min Training mit 5 Hz = 3000 Punkte

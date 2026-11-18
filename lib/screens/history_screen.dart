@@ -17,10 +17,16 @@ class HistoryScreen extends StatelessWidget {
 
     // Woche beginnt am Montag um 0 Uhr
     final now = DateTime.now();
-    final monday = DateTime(now.year, now.month, now.day)
-        .subtract(Duration(days: now.weekday - 1));
+    final monday = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).subtract(Duration(days: now.weekday - 1));
     final thisWeek = sessions.where((s) => !s.start.isBefore(monday)).toList();
-    final weekKm = thisWeek.fold<double>(0, (sum, s) => sum + s.analysis.distanceKm);
+    final weekKm = thisWeek.fold<double>(
+      0,
+      (sum, s) => sum + s.analysis.distanceKm,
+    );
 
     return Scaffold(
       body: SafeArea(
@@ -44,10 +50,14 @@ class HistoryScreen extends StatelessWidget {
                 child: Row(
                   children: [
                     const SectionLabel('Diese Woche'),
-                    const Spacer(),
-                    Text(
-                      '${thisWeek.length} Einheiten · ${formatNumber(weekKm)} km',
-                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    const SizedBox(width: 12),
+                    // Expanded + rechtsbündig: bricht bei schmalen Handys um
+                    Expanded(
+                      child: Text(
+                        '${thisWeek.length} Einheiten · ${formatNumber(weekKm)} km',
+                        textAlign: TextAlign.right,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
                     ),
                   ],
                 ),

@@ -8,12 +8,7 @@ import 'tracker_client.dart';
 /// Verwaltet BLE-Scan und Verbindung. Nach dem Verbinden steht über [link]
 /// die Leitung zum Tracker bereit, über die `TrackerClient` die Befehle
 /// aus vault/BLE-Protokoll.md schickt.
-enum BleConnectionStatus {
-  disconnected,
-  scanning,
-  connected,
-  error,
-}
+enum BleConnectionStatus { disconnected, scanning, connected, error }
 
 /// UUIDs des Sporttrackers. Müssen mit der Firmware übereinstimmen,
 /// siehe vault/BLE-Protokoll.md.
@@ -33,10 +28,12 @@ class BleService {
   /// Leitung zum Tracker, null solange keiner verbunden ist
   TrackerLink? get link => _link;
 
-  final ValueNotifier<BleConnectionStatus> connectionStatus =
-      ValueNotifier(BleConnectionStatus.disconnected);
-  final ValueNotifier<List<ScanResult>> scanResults =
-      ValueNotifier(const <ScanResult>[]);
+  final ValueNotifier<BleConnectionStatus> connectionStatus = ValueNotifier(
+    BleConnectionStatus.disconnected,
+  );
+  final ValueNotifier<List<ScanResult>> scanResults = ValueNotifier(
+    const <ScanResult>[],
+  );
   final ValueNotifier<String> errorMessage = ValueNotifier('');
 
   Future<void> startScan() async {
@@ -58,7 +55,10 @@ class BleService {
         timeout: const Duration(seconds: 15),
       );
     } catch (e) {
-      errorMessage.value = e.toString();
+      // Android ≤ 11 sucht nur mit eingeschaltetem Standort nach BLE-Geräten
+      errorMessage.value = e.toString().contains('Location services')
+          ? 'Bitte Standort am Handy einschalten – Android braucht ihn für die Bluetooth-Suche.'
+          : e.toString();
       connectionStatus.value = BleConnectionStatus.error;
     }
   }
@@ -108,12 +108,16 @@ class BleService {
   /// Notifications der Daten-Characteristic einschalten
   Future<TrackerLink> _findTracker(BluetoothDevice device) async {
     final services = await device.discoverServices();
-    final service = services.where((s) => s.uuid == TrackerUuids.service).firstOrNull;
+    final service = services
+        .where((s) => s.uuid == TrackerUuids.service)
+        .firstOrNull;
     if (service == null) {
       throw Exception('Das Gerät ist kein Sporttracker (Service fehlt).');
     }
     BluetoothCharacteristic find(Guid uuid) {
-      final c = service.characteristics.where((c) => c.uuid == uuid).firstOrNull;
+      final c = service.characteristics
+          .where((c) => c.uuid == uuid)
+          .firstOrNull;
       if (c == null) throw Exception('Characteristic $uuid fehlt am Tracker.');
       return c;
     }

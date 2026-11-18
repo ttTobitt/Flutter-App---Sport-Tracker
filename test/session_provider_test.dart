@@ -6,13 +6,20 @@ import 'package:sporttrackerflutterapp/models/pitch.dart';
 import 'package:sporttrackerflutterapp/models/session.dart';
 import 'package:sporttrackerflutterapp/providers/session_provider.dart';
 import 'package:sporttrackerflutterapp/services/mock_session.dart';
+import 'package:sporttrackerflutterapp/services/pitch_detection.dart';
 import 'package:sporttrackerflutterapp/services/pitch_service.dart';
 import 'package:sporttrackerflutterapp/services/session_database.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
-/// Liefert feste Plätze statt OpenStreetMap zu fragen und zählt die Anfragen
+/// Liefert feste Plätze statt OpenStreetMap zu fragen und zählt die Anfragen.
+/// [local] spielt die Platz-Liste in der App (normalerweise leer).
 class FakePitchService extends PitchService {
   int requests = 0;
+  List<List<LatLng>> local = const [];
+
+  @override
+  Future<List<List<LatLng>>> localPitchesAround(LatLng center, {int radiusInMeters = 300}) async =>
+      local;
 
   @override
   Future<List<List<LatLng>>> findPitchesAround(LatLng center, {int radiusInMeters = 300}) async {
@@ -193,6 +200,57 @@ void main() {
     await again.detectPitch(3);
     expect(again.sessionById(3).pitch!.length, 98);
     expect(fake.requests, 0);
+    await db.close();
+  });
+
+  test('Platz auswählen gilt nur für diese Einheit und wird wiederverwendet', () async {
+    final db = await openDb();
+    final provider = SessionProvider(db, pitchService: FakePitchService());
+    await provider.addMockSession();
+    await provider.addMockSession();
+    await provider.detectPitch(1);
+    await provider.detectPitch(2);
+    final detected = provider.sessionById(1).pitch!;
+
+    // Einheit 1 bekommt von Hand den Nachbarplatz
+    final neighbour = pitchFromPolygon(MockSessionGenerator.neighbourPolygon)!;
+    await provider.assignPitch(1, neighbour);
+    expect(provider.sessionById(1).pitch, same(neighbour));
+    // Einheit 2 behält ihren Platz, der erkannte wird nicht überschrieben
+    expect(provider.sessionById(2).pitch, same(detected));
+
+    // Denselben Platz nochmal wählen (neues, gleiches Objekt) → kein Duplikat
+    await provider.assignPitch(2, pitchFromPolygon(MockSessionGenerator.neighbourPolygon)!);
+    expect(provider.sessionById(2).pitch, same(neighbour));
+
+    // Nach Neustart der App ist die Zuordnung noch da
+    final again = SessionProvider(db, pitchService: FakePitchService());
+    await again.load();
+    expect(again.sessionById(1).pitch!.centerLat, closeTo(neighbour.centerLat, 1e-9));
+    expect(identical(again.sessionById(1).pitch, again.sessionById(2).pitch), isTrue);
+    await db.close();
+  });
+
+  test('Platz aus der Liste in der App: kein Internet nötig', () async {
+    final fake = FakePitchService()..local = [MockSessionGenerator.hartnerPolygon];
+    final db = await openDb();
+    final provider = SessionProvider(db, pitchService: fake);
+    await provider.addMockSession();
+    await provider.detectPitch(1);
+    expect(provider.pitchStatusOf(1), PitchStatus.found);
+    expect(fake.requests, 0);
+    await db.close();
+  });
+
+  test('Liste kennt nur einen Platz, der nicht passt → online nachsehen', () async {
+    final fake = FakePitchService()..local = [MockSessionGenerator.neighbourPolygon];
+    final db = await openDb();
+    final provider = SessionProvider(db, pitchService: fake);
+    await provider.addMockSession();
+    await provider.detectPitch(1);
+    expect(provider.pitchStatusOf(1), PitchStatus.found);
+    expect(provider.sessionById(1).pitch!.length, closeTo(102.5, 0.5)); // Hauptplatz
+    expect(fake.requests, 1);
     await db.close();
   });
 }
