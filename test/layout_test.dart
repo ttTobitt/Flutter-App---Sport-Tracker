@@ -5,7 +5,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import 'package:sporttrackerflutterapp/providers/session_provider.dart';
+import 'package:sporttrackerflutterapp/providers/tracker_sync.dart';
+import 'package:sporttrackerflutterapp/screens/bests_screen.dart';
+import 'package:sporttrackerflutterapp/screens/help_screen.dart';
 import 'package:sporttrackerflutterapp/screens/history_screen.dart';
+import 'package:sporttrackerflutterapp/screens/start_screen.dart';
+import 'package:sporttrackerflutterapp/services/ble_service.dart';
 import 'package:sporttrackerflutterapp/screens/session_detail_screen.dart';
 import 'package:sporttrackerflutterapp/services/mock_session.dart';
 import 'package:sporttrackerflutterapp/services/pitch_service.dart';
@@ -64,8 +69,12 @@ void main() {
 
         Future<void> show(Widget screen) async {
           await tester.pumpWidget(
-            ChangeNotifierProvider.value(
-              value: provider,
+            MultiProvider(
+              providers: [
+                ChangeNotifierProvider.value(value: provider),
+                ChangeNotifierProvider.value(value: TrackerSync(provider)),
+                Provider<BleService>.value(value: BleService()),
+              ],
               child: MaterialApp(
                 theme: buildAppTheme(),
                 builder: (context, child) => MediaQuery(
@@ -91,6 +100,14 @@ void main() {
           await tester.pump();
         }
         await show(const HistoryScreen());
+        await show(const StartScreen());
+        await show(const BestsScreen());
+        await show(const HelpScreen());
+        await tester.drag(
+          find.byType(Scrollable).first,
+          const Offset(0, -3000),
+        );
+        await tester.pump();
 
         await tester.runAsync(() => dir.delete(recursive: true));
       },

@@ -16,6 +16,10 @@ class TrackerUuids {
   static final service = Guid('be440001-a3df-4184-b0be-9ee4a9662653');
   static final commands = Guid('be440002-a3df-4184-b0be-9ee4a9662653');
   static final data = Guid('be440003-a3df-4184-b0be-9ee4a9662653');
+
+  // Standard-Akku-Dienst von Bluetooth (von der Bluetooth SIG vergeben)
+  static final batteryService = Guid('180F');
+  static final batteryLevel = Guid('2A19');
 }
 
 class BleService {
@@ -35,6 +39,11 @@ class BleService {
     const <ScanResult>[],
   );
   final ValueNotifier<String> errorMessage = ValueNotifier('');
+
+  /// Akkustand des Trackers in %, null wenn nicht verbunden oder die
+  /// Firmware ihn (noch) nicht sendet
+  final ValueNotifier<int?> batteryPercent = ValueNotifier(null);
+  StreamSubscription<List<int>>? _batterySubscription;
 
   Future<void> startScan() async {
     try {
@@ -83,6 +92,7 @@ class BleService {
       // an (512). Der Tracker kann 247, ausgehandelt wird das kleinere.
       await device.connect(autoConnect: false);
       _link = await _findTracker(device);
+      await _watchBattery(device);
 
       // Erst jetzt „verbunden“ melden: Wer darauf reagiert (TrackerSync),
       // kann dann sofort Befehle schicken.
@@ -92,6 +102,7 @@ class BleService {
       _connectionSubscription = device.connectionState.listen((state) {
         if (state == BluetoothConnectionState.disconnected) {
           _link = null;
+          batteryPercent.value = null;
           connectionStatus.value = BleConnectionStatus.disconnected;
         }
       });
@@ -130,10 +141,37 @@ class BleService {
     return _BleTrackerLink(commands, data);
   }
 
+  /// Akkustand einmal lesen und Änderungen abonnieren. Fehlt der Dienst
+  /// (ältere Firmware) oder klappt etwas nicht, bleibt er einfach leer: Der
+  /// Akku ist nur eine Anzeige, die Übertragung geht trotzdem.
+  Future<void> _watchBattery(BluetoothDevice device) async {
+    await _batterySubscription?.cancel();
+    batteryPercent.value = null;
+    try {
+      // discoverServices() wurde in _findTracker schon aufgerufen
+      final level = device.servicesList
+          .where((s) => s.uuid == TrackerUuids.batteryService)
+          .expand((s) => s.characteristics)
+          .where((c) => c.uuid == TrackerUuids.batteryLevel)
+          .firstOrNull;
+      if (level == null) return;
+      _batterySubscription = level.onValueReceived.listen((v) {
+        if (v.isNotEmpty) batteryPercent.value = v.first;
+      });
+      device.cancelWhenDisconnected(_batterySubscription!);
+      final value = await level.read();
+      if (value.isNotEmpty) batteryPercent.value = value.first;
+      await level.setNotifyValue(true);
+    } catch (e) {
+      debugPrint('Akkustand nicht lesbar: $e');
+    }
+  }
+
   Future<void> disconnect() async {
     try {
       await _device?.disconnect();
       _link = null;
+      batteryPercent.value = null;
       connectionStatus.value = BleConnectionStatus.disconnected;
     } catch (e) {
       errorMessage.value = e.toString();

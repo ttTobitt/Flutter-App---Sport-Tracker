@@ -74,6 +74,7 @@ class SessionProvider extends ChangeNotifier {
 
   /// Legt eine Test-Einheit an. Jede neue liegt zwei Tage vor der vorherigen,
   /// damit der Verlauf nach mehreren Tagen aussieht. Jede zweite ist ein Spiel.
+  /// Nur noch für die Unit-Tests, in der App gibt es keinen Knopf mehr dafür.
   Future<void> addMockSession() async {
     // Höchste ID + 1 statt Anzahl + 1: Nach dem Löschen einer Einheit gäbe es
     // sonst zweimal dieselbe Beispiel-Einheit

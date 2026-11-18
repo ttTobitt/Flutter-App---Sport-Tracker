@@ -39,8 +39,8 @@ class HistoryScreen extends StatelessWidget {
               const Padding(
                 padding: EdgeInsets.only(top: 48),
                 child: Text(
-                  'Noch keine Einheiten. Übertrage sie vom Tracker oder erzeuge '
-                  'auf der Startseite eine Beispiel-Einheit.',
+                  'Noch keine Einheiten. Verbinde auf der Startseite den '
+                  'Tracker und übertrage sie.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: AppColors.textMuted),
                 ),
